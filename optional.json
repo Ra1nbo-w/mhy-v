@@ -10,10 +10,10 @@
   {
     "name": "包子漫画",
     "key": "baozi",
-    "version": "2.2.0",
+    "version": "2.2.1",
     "fileName": "sources/baozi.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js",
-    "description": "实验：包子 www 主机版；网页登录及检查验证入口。Gatekeeper 尚未解决，UA 默认值仅对应既有 Windows 截图。"
+    "description": "验证流程修订：移除固定 Windows UA，使用分类页完成会话同步；自动同步实际 WebView UA 需要配套应用补丁。Android/Windows 真机待验证。"
   },
   {
     "name": "漫自由",

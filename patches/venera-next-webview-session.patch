@@ -1,0 +1,140 @@
+diff --git a/lib/features/comic_source/comic_source_page.dart b/lib/features/comic_source/comic_source_page.dart
+index 0fe9bcf..294c5f2 100644
+--- a/lib/features/comic_source/comic_source_page.dart
++++ b/lib/features/comic_source/comic_source_page.dart
+@@ -1360,7 +1360,11 @@ class _SourceWebLoginPageState extends SettingsSaveState<_SourceWebLoginPage> {
+         if (decoded is! Map<String, dynamic>) {
+           throw const FormatException('Invalid localStorage');
+         }
+-        return (cookies: cookies, storage: decoded);
++        return (
++          cookies: cookies,
++          storage: decoded,
++          userAgent: controller.userAgent,
++        );
+       }),
+     );
+   }
+@@ -1373,6 +1377,7 @@ class _SourceWebLoginPageState extends SettingsSaveState<_SourceWebLoginPage> {
+         final items = await controller.webStorage.localStorage.getItems();
+         return (
+           cookies: cookies,
++          userAgent: await controller.getUA(),
+           storage: <String, dynamic>{
+             for (final item in items)
+               if (item.key != null) item.key!: item.value,
+@@ -1385,7 +1390,11 @@ class _SourceWebLoginPageState extends SettingsSaveState<_SourceWebLoginPage> {
+   Future<void> _validate(
+     String capturedUrl,
+     String capturedTitle,
+-    Future<({List<io.Cookie> cookies, Map<String, dynamic> storage})> Function()
++    Future<({
++      List<io.Cookie> cookies,
++      Map<String, dynamic> storage,
++      String? userAgent,
++    })> Function()
+     read,
+   ) async {
+     if (!mounted ||
+@@ -1408,7 +1417,11 @@ class _SourceWebLoginPageState extends SettingsSaveState<_SourceWebLoginPage> {
+       setState(() => _error = error.toString());
+       return;
+     }
+-    ({List<io.Cookie> cookies, Map<String, dynamic> storage})? captured;
++    ({
++      List<io.Cookie> cookies,
++      Map<String, dynamic> storage,
++      String? userAgent,
++    })? captured;
+     SourceDataEdit? edit;
+     Future<void>? callback;
+     bool cookiesSaved = false;
+@@ -1417,6 +1430,16 @@ class _SourceWebLoginPageState extends SettingsSaveState<_SourceWebLoginPage> {
+       () async {
+         edit ??= source.prepareDataEdit((draft) {
+           draft['_localStorage'] = captured!.storage;
++          final userAgent = captured!.userAgent?.trim();
++          if (userAgent != null && userAgent.isNotEmpty) {
++            draft['_webviewSession'] = <String, String>{
++              'origin': Uri.parse(capturedUrl).origin,
++              'platform': io.Platform.operatingSystem,
++              'userAgent': userAgent,
++            };
++          } else {
++            draft.remove('_webviewSession');
++          }
+           draft['account'] = 'ok';
+         });
+         edit!.checkCurrent();
+@@ -1488,6 +1511,14 @@ class _SourceWebLoginPageState extends SettingsSaveState<_SourceWebLoginPage> {
+                     title = value;
+                     _validateEmbedded(controller);
+                   },
++                  onLoadStop: (controller) async {
++                    final loadedUrl = await controller.getUrl();
++                    final loadedTitle = await controller.getTitle();
++                    if (!mounted || _finished || loadedUrl == null) return;
++                    url = loadedUrl.toString();
++                    title = loadedTitle ?? '';
++                    _validateEmbedded(controller);
++                  },
+                 ),
+               ),
+       ),
+diff --git a/test/features/comic_source/source_web_login_test.dart b/test/features/comic_source/source_web_login_test.dart
+index 30201cc..1c40032 100644
+--- a/test/features/comic_source/source_web_login_test.dart
++++ b/test/features/comic_source/source_web_login_test.dart
+@@ -109,6 +109,16 @@ class _Controller extends Fake implements InAppWebViewController {
+   final PlatformInAppWebViewController platform = _ControllerPlatform();
+   @override
+   final WebStorage webStorage;
++  String? userAgent = 'Test WebView UA';
++  @override
++  Future<dynamic> evaluateJavascript({
++    required String source,
++    ContentWorld? contentWorld,
++  }) async => userAgent;
++  @override
++  Future<WebUri?> getUrl() async => WebUri('https://example.test/success');
++  @override
++  Future<String?> getTitle() async => 'Done';
+ }
+ 
+ class _Storage extends SourceDataStorage {
+@@ -234,6 +244,11 @@ void main() {
+       expect(source.data, {
+         'account': 'ok',
+         '_localStorage': {'token': 'captured'},
++        '_webviewSession': {
++          'origin': 'https://example.test',
++          'platform': io.Platform.operatingSystem,
++          'userAgent': 'Test WebView UA',
++        },
+       });
+       expect(find.byType(AppWebview), findsNothing);
+       expect(
+@@ -247,6 +262,23 @@ void main() {
+     skip: io.Platform.isLinux,
+   );
+ 
++  testWidgets(
++    'load stop captures the webview identity without title or navigation events',
++    (tester) async {
++      final web = await show(tester);
++      web.onLoadStop!(controller);
++      await tester.pumpAndSettle();
++      expect(source.isLogged, isTrue);
++      expect(source.data['_webviewSession'], {
++        'origin': 'https://example.test',
++        'platform': io.Platform.operatingSystem,
++        'userAgent': 'Test WebView UA',
++      });
++      expect(callbacks, 1);
++    },
++    skip: io.Platform.isLinux,
++  );
++
+   testWidgets(
+     'retired web login cannot save cookies or data after a late read',
+     (tester) async {

@@ -39,7 +39,7 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/optional.json
 | 名称 | 单源链接 | 限制 |
 |---|---|---|
 | MYCOMIC | [mycomic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js) | 多组目录漏读逻辑已修正并做模拟回归；网站拦截导致完整联网链路尚未验证。 |
-| 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 包含 www 主机统一、网页登录与检查入口；Gatekeeper 验证尚未解决。UA 默认值是特定 Windows 环境的临时兼容设置，需要与实际验证浏览器核对。 |
+| 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 2.2.1 调整验证返回流程，移除固定 Windows UA；自动同步 WebView UA 需要配套应用补丁，Android/Windows 真机待验证。详见 [验证说明](docs/baozi-verification.md)。 |
 | 漫自由 | [mheee.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js) | EPUB/MOBI 文件目录型源；可搜索、查看卷目录并打开网页下载，不支持普通分话阅读或软件内图片离线下载。 |
 
 全部八源索引为 [all.json](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/all.json)。不要把可选源的存在理解为验证问题已经解决。
@@ -67,3 +67,4 @@ node tools/test-ui.cjs
 - [venera-app/venera-configs](https://github.com/venera-app/venera-configs)：包子、MYCOMIC 基于其同名公开脚本修改；Komiic 分类 ID 参考其实现。
 
 代码来源和修改情况见 [NOTICE.md](NOTICE.md)。本仓库不包含漫画正文、账号凭据或个人请求记录。
+

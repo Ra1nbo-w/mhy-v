@@ -1,5 +1,5 @@
 // 本地定制版 2026-10-19；基于 venera-app/venera-configs 同名公开源修改。
-// 上游参考及修改说明见随包文档；无自动更新，避免覆盖本地页面设计。
+// 上游参考及修改说明见 NOTICE.md；更新由本仓库提供。
 class Baozi extends ComicSource {
   // 此漫画源的名称
   name = "包子漫画";
@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.2.0";
+  version = "2.2.1";
 
   minAppVersion = "1.16.0";
 
@@ -519,18 +519,37 @@ class Baozi extends ComicSource {
 
   // __Host- 验证 Cookie 不能跨主机复用；网页登录与目录请求使用同一主机。
   get baseUrl(){return 'https://www.baozimh.com';}
-  get browserUA(){return this.loadSetting('browserUA')||this.settings.browserUA.default;}
+  get browserUA(){
+    const manual = (this.loadSetting('browserUA') || '').trim();
+    // 旧版默认值不是本机 WebView 的身份，升级后不能继续当作有效配置。
+    if (manual && manual !== this.legacyBrowserUA) return manual;
+    const session = this.loadData('_webviewSession');
+    if (session && session.origin === this.baseUrl &&
+        session.platform === APP.platform && typeof session.userAgent === 'string') {
+      return session.userAgent.trim();
+    }
+    return '';
+  }
+  legacyBrowserUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0';
+  isVerificationPage(body) {
+    return /__gatekeeper_challenge|正在验证浏览器|正在驗證瀏覽器|Sorry,\s*you have been blocked|<title[^>]*>[^<]*(?:just a moment|验证|驗證|checking your browser)|window\._cf_chl_opt/i.test(body || '');
+  }
+  verificationError() {
+    return new Error('包子网页会话尚未通过源请求检查。请在本源“登录 → 网页登录”完成验证，等待应用自动返回，再点“检查验证”。不要从外部浏览器验证后直接返回。' +
+      (this.browserUA ? ' 若仍失败，请保持验证与请求使用相同网络，并重新验证。' :
+        ' 当前应用未提供本机 WebView 标识；需配套应用补丁，或在高级设置填写本机内置 WebView 的实际 User-Agent（不能套用其他设备的值）。'));
+  }
   // 将站点自己的验证页识别为需要人工处理，不能把它保存为图片。
   async getChecked(url, headers, extra) {
     const requestHeaders={...headers};
     if(/^https:\/\/www\.baozimh\.com(?:\/|$)/.test(url)){
-      requestHeaders['User-Agent']=this.browserUA;
+      if (this.browserUA) requestHeaders['User-Agent']=this.browserUA;
       requestHeaders['Referer']=this.baseUrl+'/';
+      // 不重复读取验证前缓存的页面；不手工复制跨域 Cookie。
+      requestHeaders['cache-time']='no';
     }
     const r = await Network.get(url, requestHeaders, extra);
-    if (r.status === 403 || /__gatekeeper_challenge|正在验证浏览器|Sorry, you have been blocked/.test(r.body || '')) {
-      throw new Error('包子漫画需要浏览器验证：请在本源账号入口点击网页登录，完成验证后返回重试。验证有效期、网络及浏览器环境可能影响结果。');
-    }
+    if (r.status === 403 || this.isVerificationPage(r.body)) throw this.verificationError();
     if (r.status !== 200) throw new Error('包子漫画请求失败：HTTP '+r.status);
     return r;
   }
@@ -548,24 +567,31 @@ class Baozi extends ComicSource {
   account = {
     logout: ()=>Network.deleteCookies(this.baseUrl),
     loginWithWebview: {
-      get url(){return 'https://www.baozimh.com/user/my_bookshelf';},
-      checkStatus:(url,title)=> /^https:\/\/www\.baozimh\.com\/user\/my_bookshelf(?:[/?#]|$)/.test(url) && /书架|書架/.test(title||'') && !/验证|驗證|moment|blocked|Cloudflare/i.test(title||'')
+      // 分类页不要求网站账号；页面正常加载后由应用保存当前 WebView 的会话。
+      url:'https://www.baozimh.com/classify?type=all&region=all&state=all&filter=%2A',
+      checkStatus:(url,title)=> {
+        if (!/^https:\/\/www\.baozimh\.com(?:\/|\/(?:classify|user\/my_bookshelf)\/?)?(?:[?#].*)?$/.test(url || '')) return false;
+        if (/验证|驗證|moment|blocked|Cloudflare|gatekeeper|checking|登录|登入|login|sign\s*in/i.test(title || '')) return false;
+        return /包子漫[画畫]/.test(title || '');
+      },
+      onLoginSuccess:()=>UI.showMessage('网页会话已同步。请点击“检查验证”确认源请求可用；这不代表已登录网站账号。')
     }
   };
   // 网页验证固定在默认实际主机；切换域名后应在对应网站重新验证。
   settings = {...this.settings,
     domains:{title:'主域名（与本次验证主机一致）',type:'select',options:[{value:'baozimh.com',text:'www.baozimh.com'}],default:'baozimh.com'},
-    browserUA:{title:'验证浏览器标识（默认对应截图 Edge 155；内置网页登录不同则需调整）',type:'input',default:'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36 Edg/155.0.0.0',validator:null},
+    browserUA:{title:'高级：本机内置 WebView User-Agent（留空使用配套应用自动同步值）',type:'input',default:'',validator:null},
     language:{title:'语言（验证入口使用简体线路）',type:'select',options:[{value:'cn',text:'简体'}],default:'cn'},
-    website:{title:'打开网站',type:'callback',buttonText:'用浏览器打开',callback:()=>UI.launchUrl(this.baseUrl)},
+    website:{title:'外部浏览器（仅查看网站，不会同步验证）',type:'callback',buttonText:'打开网站',callback:()=>UI.launchUrl(this.baseUrl)},
     checkSession:{title:'网页登录后检查源请求',type:'callback',buttonText:'检查登录同步',callback:async()=>{
       const r=await this.getChecked(this.baseUrl+'/user/my_bookshelf');
       const logged=/修改密码|修改密碼|退出|登出/.test(r.body||'');
       UI.showMessage(logged?'源请求能读取登录后的书架；返回发现页刷新。':'源请求尚未确认网站登录，请重新通过网页登录进入我的书架。');
     }},
     checkVerification:{title:'仅检查分类页验证（不要求书架已登录）',type:'callback',buttonText:'检查验证',callback:async()=>{
-      await this.getChecked(this.baseUrl+'/classify?type=all&region=cn&state=all&filter=%2a');
-      UI.showMessage('源请求已读取 www.baozimh.com 分类页。请再测试搜索和阅读；图片接口可能有独立限制。');
+      const r=await this.getChecked(this.baseUrl+'/classify?type=all&region=cn&state=all&filter=%2a');
+      if(!/comics-card|amp-list|分类|分類/.test(r.body || '')) throw new Error('页面未包含预期分类内容，尚不能确认验证通过。');
+      UI.showMessage('源请求已读取分类页。请继续测试搜索和阅读；网站账号登录和章节图片需分别确认。');
     }}
   };
   upstreamComic = this.comic;
@@ -587,3 +613,4 @@ class Baozi extends ComicSource {
     }};
 
 }
+
