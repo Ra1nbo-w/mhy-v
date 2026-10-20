@@ -1,0 +1,26 @@
+[
+  {
+    "name": "MYCOMIC",
+    "key": "mycomic",
+    "version": "2.1.0",
+    "fileName": "sources/mycomic.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js",
+    "description": "实验：MYCOMIC 多组目录修复已做模拟回归；本机仍受网站拦截，尚未完成全链路实测。"
+  },
+  {
+    "name": "包子漫画",
+    "key": "baozi",
+    "version": "2.1.0",
+    "fileName": "sources/baozi.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js",
+    "description": "实验：包子 www 主机版；网页登录及检查验证入口。Gatekeeper 尚未解决，UA 默认值仅对应既有 Windows 截图。"
+  },
+  {
+    "name": "漫自由",
+    "key": "mheee_catalog",
+    "version": "2.1.0",
+    "fileName": "sources/mheee.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js",
+    "description": "文件目录：漫自由 EPUB/MOBI。支持搜索、卷目录及打开网页下载；不支持普通分话阅读或软件内离线下载。"
+  }
+]

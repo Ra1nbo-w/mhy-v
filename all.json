@@ -1,0 +1,66 @@
+[
+  {
+    "name": "漫蛙漫画",
+    "key": "manwa_routes",
+    "version": "2.1.0",
+    "fileName": "sources/manwa.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js",
+    "description": "漫蛙单站选线：自动缓存、备用入口与走失恢复；旧多站聚合已弃用。已做目录、图片解析抽查，线路可达性视网络而定。"
+  },
+  {
+    "name": "如漫画",
+    "key": "rumanhua_com",
+    "version": "2.1.0",
+    "fileName": "sources/rumanhua.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/rumanhua.js",
+    "description": "如漫画：分区发现、分类、搜索和章节解码；当前使用 HTTP，网站 HTTPS 证书兼容问题尚存。"
+  },
+  {
+    "name": "Komiic漫画",
+    "key": "komiic_cc",
+    "version": "2.1.0",
+    "fileName": "sources/komiic.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js",
+    "description": "Komiic.cc：分类、搜索与图片票据刷新；受网站阅读额度限制。"
+  },
+  {
+    "name": "漫画屋",
+    "key": "mhua5",
+    "version": "2.1.0",
+    "fileName": "sources/mhua5.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js",
+    "description": "漫画屋：分区发现、22 个题材和进度分类；封面与目录解析已修正，分类列表可能要求浏览器验证。"
+  },
+  {
+    "name": "拷贝漫画",
+    "key": "copy_web_routes",
+    "version": "2.1.0",
+    "fileName": "sources/copy_manga.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js",
+    "description": "拷贝漫画：copy4000 / mangacopy 选线；前者已抽查，后者未验证网络可达性。搜索可尝试作品原名或繁体。"
+  },
+  {
+    "name": "MYCOMIC",
+    "key": "mycomic",
+    "version": "2.1.0",
+    "fileName": "sources/mycomic.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js",
+    "description": "实验：MYCOMIC 多组目录修复已做模拟回归；本机仍受网站拦截，尚未完成全链路实测。"
+  },
+  {
+    "name": "包子漫画",
+    "key": "baozi",
+    "version": "2.1.0",
+    "fileName": "sources/baozi.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js",
+    "description": "实验：包子 www 主机版；网页登录及检查验证入口。Gatekeeper 尚未解决，UA 默认值仅对应既有 Windows 截图。"
+  },
+  {
+    "name": "漫自由",
+    "key": "mheee_catalog",
+    "version": "2.1.0",
+    "fileName": "sources/mheee.js",
+    "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js",
+    "description": "文件目录：漫自由 EPUB/MOBI。支持搜索、卷目录及打开网页下载；不支持普通分话阅读或软件内离线下载。"
+  }
+]
