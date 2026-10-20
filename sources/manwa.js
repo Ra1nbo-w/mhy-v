@@ -1,6 +1,6 @@
 // 漫蛙单源线路版：只适配 manwa.me 同一站点的线路，不包含旧多站聚合。
 class Manwa extends ComicSource {
-    name='漫蛙漫画'; key='manwa_routes'; version = "2.1.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
+    name='漫蛙漫画'; key='manwa_routes'; version = "2.2.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
     pendingRoute=null; activeBase='';
     settings={
         line:{title:'线路选择',type:'select',options:[{value:'auto',text:'自动（缓存 / 备用入口 / 走失恢复）'},{value:'backup',text:'备用入口 fuwbn.cc/mw666'},{value:'permanent',text:'永久地址 manwa.me'},{value:'manual',text:'手动地址'}],default:'auto'},
@@ -123,7 +123,7 @@ class Manwa extends ComicSource {
                 if(!block)continue;
                 const comics=this.parseList(block,r.base);
                 if(!head||!comics.length)continue;
-                const title=head.text.replace(/更多/g,'').trim(),href=head.querySelector('a')?.attributes.href;
+                const title=head.text.replace(/更多/g,'').trim(),href=head.querySelector('a')?.attributes.href||(title==='排行榜'?'/rank':null);
                 const part={title,comics:comics.slice(0,6)};
                 if(href&&/^\/(?:update|rank|booklist)(?:[/?]|$)/.test(href))part.viewMore={page:'category',attributes:{category:title,param:href}};
                 parts.push(part);
@@ -133,7 +133,7 @@ class Manwa extends ComicSource {
         }finally{doc.dispose();}
     }}];
     category={title:'漫蛙漫画',enableRankingPage:false,parts:[
-        {name:'浏览',type:'fixed',itemType:'category',categories:['最近更新','排行榜','全部漫画'],categoryParams:['/update','/rank','/booklist']},
+        {name:'常用',type:'fixed',itemType:'category',categories:['最近更新','完结优选','排行榜','全部漫画'],categoryParams:['/update','/rank?type=end','/rank','/booklist']},
         {name:'题材',type:'fixed',itemType:'category',categories:['全彩','日漫','韩漫','大女主','悬疑','都市','职场'],categoryParams:['全彩','日漫','韩漫','大女主','悬疑','都市','职场']}
     ]};
     categoryComics={optionList:[{options:['-全部地区','2-韩国','3-日本','4-国漫','5-台漫','6-其他']},{options:['-全部进度','2-连载中','1-完结']},{options:['latest-最新','oldest-最旧','favorite-收藏']}],load:async(c,param,o,p)=>{

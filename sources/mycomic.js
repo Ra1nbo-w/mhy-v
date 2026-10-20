@@ -179,7 +179,7 @@ class MyComic extends ComicSource {
 
     key = "mycomic";
 
-    version = "2.1.0";
+    version = "2.2.0";
 
     minAppVersion = "1.16.0";
 
@@ -709,22 +709,30 @@ class MyComic extends ComicSource {
         let featured;try{featured=parseComicList(doc).slice(0,6);}finally{doc.dispose();}
         const result=featured.length?[{title:'首页精选',comics:featured}]:[];
         for(const [title,i]of [['最近更新',1],['最新上架',0]]){
-            const list=await this.originalExplore[i].load(1);result.push({title,comics:list.comics.slice(0,6)});
+            const list=await this.originalExplore[i].load(1);result.push({title,comics:list.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param:'sort:'+(i===1?'update':'id')}}});
         }
         for(const [title,sort]of [['周排行','-week'],['月排行','-month'],['历史排行','-views']]){
-            const list=await this.originalCategoryComics.ranking.load(sort,1);result.push({title,comics:list.comics.slice(0,6)});
+            const list=await this.originalCategoryComics.ranking.load(sort,1);result.push({title,comics:list.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param:'rank:'+sort.slice(1)}}});
         }
         return result;
     }}];
     settings = {
         website:{title:'网站 / 验证失败时检查拦截原因',type:'callback',buttonText:'打开 MYCOMIC',callback:()=>UI.launchUrl('https://mycomic.com/cn')}
     };
+    originalCategory = this.category;
+    category = {...this.originalCategory,parts:[{"name":"常用","type":"fixed","itemType":"category","categories":["全部漫画","最近更新","最新上架","人气漫画"],"categoryParams":["","sort:update","sort:id","sort:views"]},...this.originalCategory.parts.map((p,i)=>({...p,name:['题材','地区','受众','年份','进度'][i]}))]};
     originalCategoryComics = this.categoryComics;
     categoryComics = {
         ...this.originalCategoryComics,
         // Venera 用第一个连字符分隔选项值，负号不能直接放在值前。
-        optionList:[{options:['id-最新上架','update-最近更新','views-最高人气']}],
-        load:async(c,p,o,page)=>this.originalCategoryComics.load(c,p,['-'+(o[0]||'id')],page),
+        optionList:[{notShowWhen:["周排行","月排行","历史排行"],options:['id-最新上架','update-最近更新','views-最高人气']},{notShowWhen:["周排行","月排行","历史排行"],options:['-全部地区','japan-日本','hongkong-港台','europe-欧美','china-内地','korea-韩国','other-其他']},{notShowWhen:["周排行","月排行","历史排行"],options:['-全部受众','shaonv-少女','shaonian-少年','qingnian-青年','ertong-儿童','tongyong-通用']},{notShowWhen:["周排行","月排行","历史排行"],options:['-全部进度','0-连载中','1-已完结']},{notShowWhen:["周排行","月排行","历史排行"],options:['-全部年份',...this.originalCategory.parts[3].categoryParams.map((p,i)=>p.slice(5)+'-'+this.originalCategory.parts[3].categories[i])]}],
+        load:async(c,p,o=[],page=1)=>{
+            if(p?.startsWith('rank:'))return this.originalCategoryComics.ranking.load('-'+p.slice(5),page);
+            const filters={country:o[1]||'',audience:o[2]||'',end:o[3]||'',year:o[4]||''};let sort=o[0]||'id';
+            if(p){const [key,value]=p.split(':');if(key==='sort')sort=value;else if(['tag','country','audience','end','year'].includes(key))filters[key]=value;}
+            let url=buildComicsUrl(page,'-'+sort);for(const key of Object.keys(filters))if(filters[key]!=='')url+='&filter['+key+']='+encodeURIComponent(filters[key]);
+            const response=await fetchWithCFCheck(url),doc=new HtmlDocument(response.body);try{return{comics:parseComicList(doc),maxPage:parseMaxPage(response.body)};}finally{doc.dispose();}
+        },
         ranking:{options:['views-历史排行','week-周排行','month-月排行'],load:async(o,p)=>this.originalCategoryComics.ranking.load('-'+(o||'views'),p)}
     };
     // 只有真实站点标题才结束 WebView；Access denied/Blocked 不能当作成功。

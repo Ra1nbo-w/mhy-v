@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.1.0";
+  version = "2.2.0";
 
   minAppVersion = "1.16.0";
 
@@ -269,7 +269,7 @@ class Baozi extends ComicSource {
   categoryComics = {
     load: async (category, param, options, page) => {
       let res = await this.getChecked(
-        `${this.baseUrl}/api/bzmhq/amp_comic_list?type=${param}&region=${options[0]}&state=${options[1]}&filter=%2a&page=${page}&limit=36&language=${this.lang}&__amp_source_origin=${this.baseUrl}`
+        `${this.baseUrl}/api/bzmhq/amp_comic_list?type=${param.startsWith('region:')?'all':param}&region=${param.startsWith('region:')?param.slice(7):(options[0]||'all')}&state=${options[1]||'all'}&filter=${encodeURIComponent(options[2]==='digits'?'0-9':(options[2]||'*'))}&page=${page}&limit=36&language=${this.lang}&__amp_source_origin=${this.baseUrl}`
       );
       if (res.status !== 200) {
         throw "Invalid status code: " + res.status;
@@ -292,6 +292,7 @@ class Baozi extends ComicSource {
       {
         options: ["all-全部", "serial-连载中", "pub-已完结"],
       },
+      {options:["*-全部首字母","ABCD-ABCD","EFGH-EFGH","IJKL-IJKL","MNOP-MNOP","QRST-QRST","UVW-UVW","XYZ-XYZ","digits-数字"]},
     ],
   };
 
@@ -533,10 +534,15 @@ class Baozi extends ComicSource {
     if (r.status !== 200) throw new Error('包子漫画请求失败：HTTP '+r.status);
     return r;
   }
+  originalCategory = this.category;
+  category = {...this.originalCategory,parts:[{"name":"常用","type":"fixed","itemType":"category","categories":["全部漫画","热血漫画"],"categoryParams":["all","rexie"]},...this.originalCategory.parts.map(p=>({...p,name:'题材'})),{"name":"地区","type":"fixed","itemType":"category","categories":["国漫","日本","韩国","欧美"],"categoryParams":["region:cn","region:jp","region:kr","region:en"]}]};
   upstreamExplore = this.explore;
   explore = [{title:'包子漫画', type:'multiPartPage', load:async()=>{
     const parts = await this.upstreamExplore[0].load();
-    return Object.keys(parts).map(title=>({title,comics:parts[title].slice(0,6)}));
+    return Object.keys(parts).map(title=>{
+      const p={title,comics:parts[title].slice(0,6)},region=/国漫|國漫/.test(title)?'cn':/韩漫|韓漫/.test(title)?'kr':/日漫/.test(title)?'jp':null;
+      if(region||/热血|熱血/.test(title))p.viewMore={page:'category',attributes:{category:title,param:region?'region:'+region:'rexie'}};return p;
+    });
   }}];
   upstreamAccount = this.account;
   account = {

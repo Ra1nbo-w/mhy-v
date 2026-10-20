@@ -1,7 +1,7 @@
 // Komiic.cc；以站点当前公开 GraphQL 接口和图片票据协议适配。
 // 分类 ID 参考 venera-app/venera-configs/komiic.js；本地定制版。
 class KomiicCC extends ComicSource {
-    name='Komiic漫画'; key='komiic_cc'; version = "2.1.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
+    name='Komiic漫画'; key='komiic_cc'; version = "2.2.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
     base='https://komiic.cc'; tickets={}; ticketRequests={};
     fields='id title imageUrl authors {id name} categories {id name} dateUpdated';
     async query(query,variables={}) {
@@ -20,8 +20,8 @@ class KomiicCC extends ComicSource {
     async list(param,page=1,options=[]){
         const hot=param==='hot'||param==='views',recent=param==='recent';
         const fn=hot?'hotComics':recent?'recentUpdate':'comicByCategories';
-        const variables={pagination:{limit:30,offset:(page-1)*30,orderBy:hot?(param==='hot'?'MONTH_VIEWS':'VIEWS'):(options[0]||'DATE_UPDATED'),asc:false,status:options[1]||''}};
-        if(!hot&&!recent)variables.categoryId=param==='0'?[]:[String(param)];
+        const variables={pagination:{limit:30,offset:(page-1)*30,orderBy:hot?(param==='hot'?'MONTH_VIEWS':'VIEWS'):(options[0]||'DATE_UPDATED'),asc:false,status:param==='completed'?'END':(options[1]||'')}};
+        if(!hot&&!recent)variables.categoryId=param==='0'||param==='completed'?[]:[String(param)];
         const declaration=hot||recent?'$pagination: Pagination!':'$categoryId: [ID!]!, $pagination: Pagination!';
         const args=hot||recent?'pagination:$pagination':'categoryId:$categoryId,pagination:$pagination';
         const data=await this.query('query('+declaration+'){'+fn+'('+args+'){'+this.fields+'}}',variables);
@@ -35,14 +35,14 @@ class KomiicCC extends ComicSource {
     }};
     explore=[{title:'Komiic漫画',type:'multiPartPage',load:async()=>{
         const parts=[];
-        for(const [title,param] of [['最近更新','recent'],['本月热门','hot'],['累计热门','views']]){
+        for(const [title,param] of [['最近更新','recent'],['本月热门','hot'],['人气漫画','views'],['完结漫画','completed']]){
             const data=await this.list(param,1);
             parts.push({title,comics:data.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param}}});
         }
         return parts;
     }}];
     category={title:'Komiic漫画',enableRankingPage:false,parts:[
-        {name:'浏览',type:'fixed',itemType:'category',categories:['最近更新','本月热门','累计热门','全部漫画'],categoryParams:['recent','hot','views','0']},
+        {name:'常用',type:'fixed',itemType:'category',categories:['最近更新','本月热门','人气漫画','完结漫画','全部漫画'],categoryParams:['recent','hot','views','completed','0']},
         {name:'题材',type:'fixed',itemType:'category',categories:['爱情','校园','搞笑','生活','悬疑','冒险','魔幻','魔法','科幻','热血','推理','美食','恐怖','历史','战争','武侠','音乐','体育'],categoryParams:['1','4','5','6','7','8','11','12','17','21','23','27','9','32','33','35','37','40']}
     ]};
     categoryComics={optionList:[{options:['DATE_UPDATED-更新','VIEWS-人气','FAVORITE_COUNT-收藏']},{options:['-全部','ONGOING-连载中','END-完结']}],load:async(c,p,o,page)=>this.list(p,page,o)};

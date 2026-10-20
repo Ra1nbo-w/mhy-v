@@ -12,7 +12,9 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/index.json
 
 GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地址。不同应用版本的入口名称可能不同，旧版可以使用下表中的单源 JS 链接。
 
-已安装同 key 的源会更新已有源，不会额外安装一份。此次发布统一版本为 2.1.0，并保留之前的源 key；每个脚本的更新地址也指向本仓库。
+已安装同 key 的源会更新已有源，不会额外安装一份。发现页与分类页修订版为 2.2.0（如漫画未改动，保持 2.1.0），保留之前的源 key；每个脚本的更新地址也指向本仓库。
+
+本次逐项核对及未实现限制见 [发现页与分类页核对记录](docs/ui-audit.md)。更新源后刷新发现页；仍显示旧分区时完全退出应用再启动。
 
 ## 默认源
 
@@ -52,6 +54,7 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/optional.json
 
 ```sh
 node tools/validate.cjs
+node tools/test-ui.cjs
 ```
 
 检查覆盖脚本语法、索引格式、名称/key/版本/更新地址一致性及重复 key；不会代替网站或手机实测。另需手动验证搜索、详情目录顺序、章节图片和离线下载。不要把账号 Cookie、令牌、原始抓包或个人日志提交到仓库。
