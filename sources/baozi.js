@@ -7,9 +7,9 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.2.1";
+  version = "2.2.2";
 
-  minAppVersion = "1.16.0";
+  minAppVersion = "1.18.0";
 
   // 更新链接
   url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js";
@@ -564,17 +564,38 @@ class Baozi extends ComicSource {
     });
   }}];
   upstreamAccount = this.account;
+  async checkWebsiteAccount() {
+    const r = await this.getChecked(this.baseUrl + '/user/my_bookshelf');
+    // Ignore script/template strings: only rendered account controls count.
+    const html = (r.body || '').replace(/<!--[\s\S]*?-->|<script\b[^>]*>[\s\S]*?<\/script\s*>|<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '');
+    const controls = html.match(/<(?:a|button)\b[^>]*>[\s\S]*?<\/(?:a|button)\s*>/gi) || [];
+    const hasAccountControl = controls.some(control => /^(?:退出(?:登录|登入)?|登出|注销|註銷|修改密[码碼])$/.test(control.replace(/<[^>]*>/g, '').replace(/\s+/g, '')));
+    const hasLoginForm = /<input\b[^>]*type\s*=\s*["']?password\b/i.test(html);
+    if (!hasAccountControl || hasLoginForm) {
+      throw new Error('网站账号尚未同步：请在内置网页登录后点击“我的书架”，等待自动返回。若停在主页，请先进入书架；验证通过不等于账号登录。');
+    }
+  }
   account = {
     logout: ()=>Network.deleteCookies(this.baseUrl),
     loginWithWebview: {
-      // 分类页不要求网站账号；页面正常加载后由应用保存当前 WebView 的会话。
-      url:'https://www.baozimh.com/classify?type=all&region=all&state=all&filter=%2A',
+      // Account login must reach the bookshelf, not a public classification page.
+      url:'https://www.baozimh.com/user/my_bookshelf',
       checkStatus:(url,title)=> {
-        if (!/^https:\/\/www\.baozimh\.com(?:\/|\/(?:classify|user\/my_bookshelf)\/?)?(?:[?#].*)?$/.test(url || '')) return false;
+        if (!/^https:\/\/www\.baozimh\.com\/user\/my_bookshelf\/?(?:[?#].*)?$/.test(url || '')) return false;
         if (/验证|驗證|moment|blocked|Cloudflare|gatekeeper|checking|登录|登入|login|sign\s*in/i.test(title || '')) return false;
-        return /包子漫[画畫]/.test(title || '');
+        return /书架|書架/.test(title || '');
       },
-      onLoginSuccess:()=>UI.showMessage('网页会话已同步。请点击“检查验证”确认源请求可用；这不代表已登录网站账号。')
+      onLoginSuccess:async()=> {
+        try {
+          await this.checkWebsiteAccount();
+        } catch (error) {
+          // The host writes its account flag before this callback. Undo it on
+          // failure so a public page/failed request cannot leave a fake login.
+          this.deleteData('account');
+          throw error;
+        }
+        UI.showMessage('网站账号已同步，源请求已确认登录后的书架。');
+      }
     }
   };
   // 网页验证固定在默认实际主机；切换域名后应在对应网站重新验证。
@@ -584,9 +605,8 @@ class Baozi extends ComicSource {
     language:{title:'语言（验证入口使用简体线路）',type:'select',options:[{value:'cn',text:'简体'}],default:'cn'},
     website:{title:'外部浏览器（仅查看网站，不会同步验证）',type:'callback',buttonText:'打开网站',callback:()=>UI.launchUrl(this.baseUrl)},
     checkSession:{title:'网页登录后检查源请求',type:'callback',buttonText:'检查登录同步',callback:async()=>{
-      const r=await this.getChecked(this.baseUrl+'/user/my_bookshelf');
-      const logged=/修改密码|修改密碼|退出|登出/.test(r.body||'');
-      UI.showMessage(logged?'源请求能读取登录后的书架；返回发现页刷新。':'源请求尚未确认网站登录，请重新通过网页登录进入我的书架。');
+      await this.checkWebsiteAccount();
+      UI.showMessage('源请求能读取登录后的书架；返回发现页刷新。');
     }},
     checkVerification:{title:'仅检查分类页验证（不要求书架已登录）',type:'callback',buttonText:'检查验证',callback:async()=>{
       const r=await this.getChecked(this.baseUrl+'/classify?type=all&region=cn&state=all&filter=%2a');
