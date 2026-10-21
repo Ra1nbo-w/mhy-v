@@ -1,6 +1,6 @@
 // 漫画屋移动网页适配；仅读取目录和图片，不执行网页广告脚本。
 class Mhua5 extends ComicSource {
-    name='漫画屋'; key='mhua5'; version = "2.2.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js";
+    name='漫画屋'; key='mhua5'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js";
     base='https://mhua5.com';
     headers(){return{'User-Agent':'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',Referer:this.base+'/'};}
     absolute(path){if(/^https?:\/\//.test(path||''))return path;if(String(path).startsWith('//'))return'https:'+path;return this.base+'/'+String(path||'').replace(/^\//,'');}
@@ -47,7 +47,7 @@ class Mhua5 extends ComicSource {
     }}];
     // 题材与进度 ID 均来自站点桌面首页导航。
     category={title:'漫画屋',enableRankingPage:false,parts:[
-        {name:'常用',type:'fixed',itemType:'category',categories:['精品推荐','上升最快','新作尝鲜','人气排行','最新上架'],categoryParams:['/index.php/category/quality/39','/index.php/custom/ascension','/index.php/custom/update','/index.php/category/order/hits','/index.php/category/order/addtime']},
+
         {name:'题材',type:'fixed',itemType:'category',categories:['热血','冒险','科幻','霸总','玄幻','校园','修真','搞笑','穿越','后宫','耽美','恋爱','悬疑','恐怖','战争','动作','同人','竞技','励志','架空','灵异','百合'],categoryParams:Array.from({length:22},(_,i)=>'/index.php/category/tags/'+(i+6))},
         {name:'进度',type:'fixed',itemType:'category',categories:['连载','完结'],categoryParams:['/index.php/category/finish/1','/index.php/category/finish/2']}
     ]};
@@ -97,3 +97,4 @@ class Mhua5 extends ComicSource {
     }};
 
 }
+

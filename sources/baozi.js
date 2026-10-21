@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.2.4";
+  version = "2.3.0";
 
   minAppVersion = "1.18.0";
 
@@ -570,7 +570,7 @@ class Baozi extends ComicSource {
     return r;
   }
   originalCategory = this.category;
-  category = {...this.originalCategory,parts:[{"name":"常用","type":"fixed","itemType":"category","categories":["全部漫画","热血漫画"],"categoryParams":["all","rexie"]},...this.originalCategory.parts.map(p=>({...p,name:'题材'})),{"name":"地区","type":"fixed","itemType":"category","categories":["国漫","日本","韩国","欧美"],"categoryParams":["region:cn","region:jp","region:kr","region:en"]}]};
+  category = {...this.originalCategory,parts:[...this.originalCategory.parts.map(p=>({...p,name:'题材'})),{"name":"地区","type":"fixed","itemType":"category","categories":["国漫","日本","韩国","欧美"],"categoryParams":["region:cn","region:jp","region:kr","region:en"]}]};
   upstreamExplore = this.explore;
   explore = [{title:'包子漫画', type:'multiPartPage', load:async()=>{
     const parts = await this.upstreamExplore[0].load();

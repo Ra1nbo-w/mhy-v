@@ -179,7 +179,7 @@ class MyComic extends ComicSource {
 
     key = "mycomic";
 
-    version = "2.2.0";
+    version = "2.3.0";
 
     minAppVersion = "1.16.0";
 
@@ -704,23 +704,32 @@ class MyComic extends ComicSource {
     // 来源名称只使用 MYCOMIC；分区集中在一个发现页面。
     originalExplore = this.explore;
     explore = [{title:'MYCOMIC',type:'multiPartPage',load:async()=>{
-        const home=await fetchWithCFCheck('https://mycomic.com/cn');
-        const doc=new HtmlDocument(home.body);
-        let featured;try{featured=parseComicList(doc).slice(0,6);}finally{doc.dispose();}
-        const result=featured.length?[{title:'首页精选',comics:featured}]:[];
+        const result=[],errors=[];
+        try{
+            const home=await fetchWithCFCheck('https://mycomic.com/cn');
+            if(home.status!==200)throw new Error('MYCOMIC 首页请求失败：HTTP '+home.status);
+            const doc=new HtmlDocument(home.body);
+            let homeComics;try{homeComics=parseComicList(doc);}finally{doc.dispose();}
+            const featured=homeComics.slice(0,6);
+            if(featured.length)result.push({title:'首页精选',comics:featured});
+            // 首页首屏有 12 本轮播作品，随后才是“推荐给你”的作品列表。
+            const recommended=homeComics.slice(homeComics.length>12?12:6,homeComics.length>12?18:12);
+            if(recommended.length)result.push({title:'推荐给你',comics:recommended});
+        }catch(e){errors.push(e);}
         for(const [title,i]of [['最近更新',1],['最新上架',0]]){
-            const list=await this.originalExplore[i].load(1);result.push({title,comics:list.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param:'sort:'+(i===1?'update':'id')}}});
+            try{
+                const list=await this.originalExplore[i].load(1);
+                result.push({title,comics:list.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param:'sort:'+(i===1?'update':'id')}}});
+            }catch(e){errors.push(e);}
         }
-        for(const [title,sort]of [['周排行','-week'],['月排行','-month'],['历史排行','-views']]){
-            const list=await this.originalCategoryComics.ranking.load(sort,1);result.push({title,comics:list.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param:'rank:'+sort.slice(1)}}});
-        }
+        if(!result.length)throw errors[0]||new Error('MYCOMIC 没有返回发现页内容。');
         return result;
     }}];
     settings = {
         website:{title:'网站 / 验证失败时检查拦截原因',type:'callback',buttonText:'打开 MYCOMIC',callback:()=>UI.launchUrl('https://mycomic.com/cn')}
     };
     originalCategory = this.category;
-    category = {...this.originalCategory,parts:[{"name":"常用","type":"fixed","itemType":"category","categories":["全部漫画","最近更新","最新上架","人气漫画"],"categoryParams":["","sort:update","sort:id","sort:views"]},...this.originalCategory.parts.map((p,i)=>({...p,name:['题材','地区','受众','年份','进度'][i]}))]};
+    category = {...this.originalCategory,parts:this.originalCategory.parts.map((p,i)=>({...p,name:['题材','地区','受众','年份','进度'][i]}))};
     originalCategoryComics = this.categoryComics;
     categoryComics = {
         ...this.originalCategoryComics,
@@ -822,3 +831,4 @@ class MyComic extends ComicSource {
     }};
 
 }
+

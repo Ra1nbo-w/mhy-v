@@ -12,7 +12,7 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/index.json
 
 GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地址。不同应用版本的入口名称可能不同，旧版可以使用下表中的单源 JS 链接。
 
-已安装同 key 的源会更新已有源，不会额外安装一份。发现页与分类页修订版为 2.2.0（如漫画未改动，保持 2.1.0），保留之前的源 key；每个脚本的更新地址也指向本仓库。
+已安装同 key 的源会更新已有源，不会额外安装一份。本次更新的七个源为 2.3.0（如漫画未改动，保持 2.1.0）；保留之前的源 key，更新地址仍指向本仓库。
 
 本次逐项核对及未实现限制见 [发现页与分类页核对记录](docs/ui-audit.md)。更新源后刷新发现页；仍显示旧分区时完全退出应用再启动。
 
@@ -22,9 +22,9 @@ GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地�
 
 | 名称 | 单源链接 | 已知情况 |
 |---|---|---|
-| 漫蛙漫画 | [manwa.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js) | 同站选线、备用入口及走失恢复；已弃用最初的多站聚合方案。 |
+| 漫蛙漫画 | [manwa.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js) | 同站选线；分类页按题材、地区、面向、进度分组，支持新漫排序。 |
 | 如漫画 | [rumanhua.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/rumanhua.js) | 搜索、分类及图片解码；当前使用 HTTP，站点 HTTPS 兼容问题尚存。 |
-| Komiic漫画 | [komiic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js) | 对接 komiic.cc 和图片票据；阅读额度以网站为准。 |
+| Komiic漫画 | [komiic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js) | 分类页收录网站公开接口的 71 个分类、七个分组；阅读额度以网站为准。 |
 | 漫画屋 | [mhua5.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js) | 22 个题材及进度分类；修正封面请求头与目录名，分类列表可能要求验证。 |
 | 拷贝漫画 | [copy_manga.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js) | 支持 copy4000 / mangacopy 选线；后者网络可达性尚未验证。 |
 
@@ -38,9 +38,9 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/optional.json
 
 | 名称 | 单源链接 | 限制 |
 |---|---|---|
-| MYCOMIC | [mycomic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js) | 多组目录漏读逻辑已修正并做模拟回归；网站拦截导致完整联网链路尚未验证。 |
-| 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 2.2.4 修复新增登录入口设置在首次安装/升级时的构建错误；识别 cn.bzmgcn.com 登录成功页，请求跟随实际登录主机。源 JS 回归通过，完整直连及 Android/Windows 实机待验证。详见 [验证说明](docs/baozi-verification.md)。 |
-| 漫自由 | [mheee.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js) | EPUB/MOBI 文件目录型源；可搜索、查看卷目录并打开网页下载，不支持普通分话阅读或软件内图片离线下载。 |
+| MYCOMIC | [mycomic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js) | 发现页为首页精选、推荐给你、最近更新、最新上架；网站拦截导致完整联网链路尚未验证。 |
+| 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 2.3.0 延续登录主机修复并移除分类页「常用」；完整直连及 Android/Windows 实机仍待验证。详见 [验证说明](docs/baozi-verification.md)。 |
+| 漫自由 | [mheee.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js) | 发现页保留最近更新和最高评分；EPUB/MOBI 文件目录型源，不支持普通分话阅读。 |
 
 全部八源索引为 [all.json](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/all.json)。不要把可选源的存在理解为验证问题已经解决。
 

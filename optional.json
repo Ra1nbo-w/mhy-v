@@ -2,25 +2,25 @@
   {
     "name": "MYCOMIC",
     "key": "mycomic",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "fileName": "sources/mycomic.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js",
-    "description": "实验：MYCOMIC 多组目录修复已做模拟回归；本机仍受网站拦截，尚未完成全链路实测。"
+    "description": "MYCOMIC 发现页显示首页精选、推荐给你、最近更新、最新上架；网站拦截下尚未完成实机链路验证。"
   },
   {
     "name": "包子漫画",
     "key": "baozi",
-    "version": "2.2.4",
+    "version": "2.3.0",
     "fileName": "sources/baozi.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js",
-    "description": "修复新增登录入口设置在首次安装/升级时的构建错误；识别 cn.bzmgcn.com 书架登录页，请求跟随登录主机，提供本地 Cookie 保存状态检查。实机待验证。"
+    "description": "包子网页验证兼容和本地 Cookie 状态检查；分类页移除常用，Android/Windows 实机登录待验证。"
   },
   {
     "name": "漫自由",
     "key": "mheee_catalog",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "fileName": "sources/mheee.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js",
-    "description": "文件目录：漫自由 EPUB/MOBI。支持搜索、卷目录及打开网页下载；不支持普通分话阅读或软件内离线下载。"
+    "description": "漫自由 EPUB/MOBI 文件目录型源；发现页保留最近更新和最高评分，支持网页文件下载。"
   }
 ]

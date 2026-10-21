@@ -1,7 +1,7 @@
 // Komiic.cc；以站点当前公开 GraphQL 接口和图片票据协议适配。
 // 分类 ID 参考 venera-app/venera-configs/komiic.js；本地定制版。
 class KomiicCC extends ComicSource {
-    name='Komiic漫画'; key='komiic_cc'; version = "2.2.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
+    name='Komiic漫画'; key='komiic_cc'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
     base='https://komiic.cc'; tickets={}; ticketRequests={};
     fields='id title imageUrl authors {id name} categories {id name} dateUpdated';
     async query(query,variables={}) {
@@ -35,16 +35,26 @@ class KomiicCC extends ComicSource {
     }};
     explore=[{title:'Komiic漫画',type:'multiPartPage',load:async()=>{
         const parts=[];
-        for(const [title,param] of [['最近更新','recent'],['本月热门','hot'],['人气漫画','views'],['完结漫画','completed']]){
+        for(const [title,param] of [['最近更新','recent'],['本月热门','hot'],['人气漫画','views']]){
             const data=await this.list(param,1);
             parts.push({title,comics:data.comics.slice(0,6),viewMore:{page:'category',attributes:{category:title,param}}});
         }
         return parts;
     }}];
-    category={title:'Komiic漫画',enableRankingPage:false,parts:[
-        {name:'常用',type:'fixed',itemType:'category',categories:['最近更新','本月热门','人气漫画','完结漫画','全部漫画'],categoryParams:['recent','hot','views','completed','0']},
-        {name:'题材',type:'fixed',itemType:'category',categories:['爱情','校园','搞笑','生活','悬疑','冒险','魔幻','魔法','科幻','热血','推理','美食','恐怖','历史','战争','武侠','音乐','体育'],categoryParams:['1','4','5','6','7','8','11','12','17','21','23','27','9','32','33','35','37','40']}
-    ]};
+    // 分类 ID 来自网站 allCategory 接口；网页分组可随网站更新，更新源时重新核对。
+    categoryGroups=[
+        ['类型','愛情:1 搞笑:5 劇情:97 戲劇:58 冒險:8 格鬥:13 動作:64 戰鬥:54 生存:59 武俠:35 魔幻:11 魔法:12 黑暗奇幻:57 科幻:17 機戰:36 賽博龐克:277 懸疑:7 推理:23 偵探:25 犯罪:93 恐怖:9 驚悚:48 策略:60'],
+        ['关系','百合:18 耽美:16 友情:92 親情:247 性轉換:70 偽娘:26'],
+        ['设定','校園:4 職場:10 生活:6 日常:78 家庭:276 異世界:47 轉生:56 穿越:88 後宮:2 社會:31 政治:61 歷史:32 宮廷:255 戰爭:33'],
+        ['题材','美食:27 醫療:85 音樂:37 舞蹈:34 競技:22 體育:40 復仇:55 黑道:42 賭博:114 同人:164'],
+        ['氛围','青春:81 熱血:21 勵志:15 成長:184 治癒:19 溫馨:129 萌系:20 神鬼:3 心理:87 黑暗:62 致鬱:86'],
+        ['客群','少女:113 青年:246 女性向:123 宅男:14 成人:51'],
+        ['形式','四格:28 雜誌:24']
+    ];
+    category={title:'Komiic漫画',enableRankingPage:false,parts:this.categoryGroups.map(([name,entries])=>{
+        const pairs=entries.split(' ').map(entry=>entry.split(':'));
+        return{name,type:'fixed',itemType:'category',categories:pairs.map(pair=>pair[0]),categoryParams:pairs.map(pair=>pair[1])};
+    })};
     categoryComics={optionList:[{options:['DATE_UPDATED-更新','VIEWS-人气','FAVORITE_COUNT-收藏']},{options:['-全部','ONGOING-连载中','END-完结']}],load:async(c,p,o,page)=>this.list(p,page,o)};
     async ticket(kid){
         const saved=this.tickets[kid];
@@ -109,3 +119,4 @@ class KomiicCC extends ComicSource {
     }};
 
 }
+

@@ -1,6 +1,6 @@
 // 漫蛙单源线路版：只适配 manwa.me 同一站点的线路，不包含旧多站聚合。
 class Manwa extends ComicSource {
-    name='漫蛙漫画'; key='manwa_routes'; version = "2.2.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
+    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
     pendingRoute=null; activeBase='';
     settings={
         line:{title:'线路选择',type:'select',options:[{value:'auto',text:'自动（缓存 / 备用入口 / 走失恢复）'},{value:'backup',text:'备用入口 fuwbn.cc/mw666'},{value:'permanent',text:'永久地址 manwa.me'},{value:'manual',text:'手动地址'}],default:'auto'},
@@ -133,16 +133,28 @@ class Manwa extends ComicSource {
         }finally{doc.dispose();}
     }}];
     category={title:'漫蛙漫画',enableRankingPage:false,parts:[
-        {name:'常用',type:'fixed',itemType:'category',categories:['最近更新','完结优选','排行榜','全部漫画'],categoryParams:['/update','/rank?type=end','/rank','/booklist']},
-        {name:'题材',type:'fixed',itemType:'category',categories:['全彩','日漫','韩漫','大女主','悬疑','都市','职场'],categoryParams:['全彩','日漫','韩漫','大女主','悬疑','都市','职场']}
+        {name:'题材',type:'fixed',itemType:'category',categories:['全彩','日漫','韩漫','大女主','悬疑','都市','职场'],categoryParams:['全彩','日漫','韩漫','大女主','悬疑','都市','职场']},
+        {name:'地区',type:'fixed',itemType:'category',categories:['韩国','日漫','国漫','台漫','其他','未分类'],categoryParams:['area:2','area:3','area:4','area:5','area:6','area:1']},
+        {name:'面向',type:'fixed',itemType:'category',categories:['一般向','BL向','禁漫','TL向','GL向'],categoryParams:['gender:2','gender:0','gender:1','gender:3','gender:4']},
+        {name:'进度',type:'fixed',itemType:'category',categories:['连载中','完结'],categoryParams:['end:2','end:1']}
     ]};
-    categoryComics={optionList:[{options:['-全部地区','2-韩国','3-日本','4-国漫','5-台漫','6-其他']},{options:['-全部进度','2-连载中','1-完结']},{options:['latest-最新','oldest-最旧','favorite-收藏']}],load:async(c,param,o,p)=>{
-        const filter='&area='+encodeURIComponent(o[0]||'')+'&end='+encodeURIComponent(o[1]||'')+'&sort='+({latest:'-1',oldest:'0',favorite:'1'}[o[2]]||'-1');
+    categoryComics={optionList:[
+        {options:['-全部地区','2-韩国','3-日本','4-国漫','5-台漫','6-其他','1-未分类']},
+        {options:['-全部进度','2-连载中','1-完结']},
+        {options:['latest-最新','oldest-最旧','favorite-收藏','newest-新漫']},
+        {options:['-全部面向','2-一般向','0-BL向','1-禁漫','3-TL向','4-GL向']}
+    ],load:async(c,param,o=[],p=1)=>{
+        const selected={area:o[0]||'',end:o[1]||'',sort:({latest:'-1',oldest:'0',favorite:'1',newest:'2'}[o[2]]??'-1'),gender:o[3]||'-1'};
         if(String(param).startsWith('/')){
             if(!/^\/(?:update|rank|booklist)(?:\?[^#\s]*)?$/.test(param))throw new Error('未知漫蛙分类。');
-            return this.list(param+(param.startsWith('/booklist')?(param.includes('?')?filter:'?'+filter.slice(1)):''),p);
-        }
-        return this.list('/booklist?tag='+encodeURIComponent(param)+filter,p);
+            if(!param.startsWith('/booklist'))return this.list(param,p);
+        }else if(/^(?:area|end|gender):\d+$/.test(String(param))){
+            const [key,value]=param.split(':');selected[key]=value;
+            param='/booklist';
+        }else if(!this.category.parts[0].categoryParams.includes(param))throw new Error('未知漫蛙题材。');
+        const query='area='+encodeURIComponent(selected.area)+'&end='+encodeURIComponent(selected.end)+'&gender='+encodeURIComponent(selected.gender)+'&sort='+encodeURIComponent(selected.sort)+'&has_full=-1&level=-1';
+        if(param==='/booklist')return this.list('/booklist?tag=&'+query,p);
+        return this.list('/booklist?tag='+encodeURIComponent(param)+'&'+query,p);
     }};
     comic={
         loadInfo:async id=>{
@@ -193,3 +205,4 @@ class Manwa extends ComicSource {
     }};
 
 }
+
