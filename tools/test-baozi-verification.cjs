@@ -2,9 +2,13 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert');
 const code = fs.readFileSync(require('path').join(__dirname, '../sources/baozi.js'), 'utf8');
 function make(platform, session, manual, host='www.baozimh.com') {
   const requests = [];
-  const data = {_webviewSession:session}, messages=[];
+  const data = {_webviewSession:session, settings:host?{loginHost:host}:{}}, messages=[];
+  let construction=true;
   class ComicSource {
-    loadSetting(key) { return key === 'browserUA' ? manual : key === 'loginHost' ? host : undefined; }
+    loadSetting(key) {
+      if(construction) throw new Error('Bad state: Setting not found: '+key);
+      return key === 'browserUA' ? manual : key === 'loginHost' ? host : undefined;
+    }
     loadData(key) { return data[key]; }
     saveData(key, value) { data[key]=value; }
     deleteData(key) { delete data[key]; }
@@ -14,7 +18,13 @@ function make(platform, session, manual, host='www.baozimh.com') {
     return {status: 200, body: '<div class="comics-card">example</div>'};
   }};
   const context = vm.createContext({ComicSource, Network, APP:{platform}, UI:{showMessage: message => messages.push(message)}});
-  return {source: vm.runInContext(code + ';new Baozi()', context), requests, Network, data, messages};
+  const source=vm.runInContext(code + ';new Baozi()', context);
+  // VeneraNext parses account URLs before registering the new settings schema.
+  // SourceConstructionReads permits data snapshots but settings may be absent.
+  const parsedLoginUrl=source.account.loginWithWebview.url;
+  assert(parsedLoginUrl.endsWith('/user/my_bookshelf'));
+  construction=false;
+  return {source, requests, Network, data, messages};
 }
 (async () => {
   for (const platform of ['android', 'windows']) {
@@ -114,5 +124,12 @@ function make(platform, session, manual, host='www.baozimh.com') {
     }
   }
   assert.equal(make('android',undefined,undefined,null).source.baseUrl,'https://cn.bzmgcn.com');
-  console.log('PASS: Android/Windows cn.bzmgcn.com and www landing capture, same-origin requests, cross-host isolation, nonblocking return, cookie status privacy and challenge rejection.');
+  const upgrade=make('windows',undefined,undefined,null);
+  upgrade.data.settings={domains:'baozimh.com',language:'cn'};
+  assert.equal(upgrade.source.account.loginWithWebview.url,'https://cn.bzmgcn.com/user/my_bookshelf');
+  upgrade.data.settings.loginHost='www.baozimh.com';
+  assert.equal(upgrade.source.account.loginWithWebview.url,'https://www.baozimh.com/user/my_bookshelf');
+  upgrade.data.settings.loginHost='evil.test';
+  assert.equal(upgrade.source.account.loginWithWebview.url,'https://cn.bzmgcn.com/user/my_bookshelf');
+  console.log('PASS: first-install/upgrade schema construction, Android/Windows landing capture, same-origin requests, nonblocking return, cookie status privacy and challenge rejection.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

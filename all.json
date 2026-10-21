@@ -50,10 +50,10 @@
   {
     "name": "包子漫画",
     "key": "baozi",
-    "version": "2.2.3",
+    "version": "2.2.4",
     "fileName": "sources/baozi.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js",
-    "description": "识别 cn.bzmgcn.com 真实书架登录页，请求跟随登录主机；保存会话后直接返回，新增不联网的 Cookie 保存状态检查。完整直连及 Android/Windows 实机待验证。"
+    "description": "修复新增登录入口设置在首次安装/升级时的构建错误；识别 cn.bzmgcn.com 书架登录页，请求跟随登录主机，提供本地 Cookie 保存状态检查。实机待验证。"
   },
   {
     "name": "漫自由",

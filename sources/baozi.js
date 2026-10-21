@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.2.3";
+  version = "2.2.4";
 
   minAppVersion = "1.18.0";
 
@@ -519,7 +519,11 @@ class Baozi extends ComicSource {
 
   // __Host- 验证 Cookie 不能跨主机复用；网页登录与目录请求使用同一主机。
   get loginHost() {
-    const host = this.loadSetting('loginHost');
+    // Account URLs are parsed before the new settings schema is registered.
+    // Construction reads allow saved data, but loadSetting(newKey) can throw
+    // on first install or when upgrading from a source without that key.
+    const saved = this.loadData('settings');
+    const host = saved && saved.loginHost;
     return ['cn.bzmgcn.com', 'www.baozimh.com'].includes(host) ? host : 'cn.bzmgcn.com';
   }
   websiteOrigin(url) {
