@@ -1,8 +1,9 @@
 // Komiic.cc；以站点当前公开 GraphQL 接口和图片票据协议适配。
 // 分类 ID 参考 venera-app/venera-configs/komiic.js；本地定制版。
 class KomiicCC extends ComicSource {
-    name='Komiic漫画'; key='komiic_cc'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
-    base='https://komiic.cc'; tickets={}; ticketRequests={};
+    name='Komiic漫画'; key='komiic_cc'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
+    base='https://komiic.cc'; tickets={}; ticketRequests={}; ticketEpoch=0;
+    resetTickets(){this.ticketEpoch++;this.tickets={};this.ticketRequests={};}
     fields='id title imageUrl authors {id name} categories {id name} dateUpdated';
     async query(query,variables={}) {
         const headers={'Content-Type':'application/json','Referer':this.base+'/'};
@@ -60,11 +61,14 @@ class KomiicCC extends ComicSource {
         const saved=this.tickets[kid];
         if(saved&&saved.validUntil>Date.now()+15000)return saved;
         if(this.ticketRequests[kid])return this.ticketRequests[kid];
-        this.ticketRequests[kid]=(async()=>{
+        const epoch=this.ticketEpoch;
+        const pending=(async()=>{
             const data=await this.query('query($kid:String!){getImageTicket(kid:$kid){url ticket kid width height expiresAt}}',{kid});
+            if(epoch!==this.ticketEpoch)throw new Error('Komiic 登录状态已变化，请重新打开章节。');
             return this.remember(data.getImageTicket);
         })();
-        try{return await this.ticketRequests[kid];}finally{delete this.ticketRequests[kid];}
+        this.ticketRequests[kid]=pending;
+        try{return await pending;}finally{if(this.ticketRequests[kid]===pending)delete this.ticketRequests[kid];}
     }
     remember(t){
         if(!t||!t.kid||!t.ticket||!t.url)throw new Error('Komiic 未发放图片票据，可能已达阅读额度。');
@@ -85,8 +89,10 @@ class KomiicCC extends ComicSource {
             return new ComicDetails({title:row.title,cover:row.imageUrl,tags:{作者:(row.authors||[]).map(a=>a.name),题材:(row.categories||[]).map(c=>c.name)},chapters,updateTime:row.dateUpdated});
         },
         loadEp:async(id,ep)=>{
+            const epoch=this.ticketEpoch;
             const chapterId=String(ep).replace(/^ep_/, '');
             const data=await this.query('query($chapterId:ID!){imageTicketsByChapterId(chapterId:$chapterId){url ticket kid width height expiresAt}}',{chapterId});
+            if(epoch!==this.ticketEpoch)throw new Error('Komiic 登录状态已变化，请重新打开章节。');
             const rows=data.imageTicketsByChapterId;
             if(!rows?.length)throw new Error('Komiic 章节图片为空，可能需要登录或已达额度。');
             return {images:rows.map(t=>{this.remember(t);return this.base+'/api/image/'+t.kid;})};
@@ -104,10 +110,10 @@ class KomiicCC extends ComicSource {
             const r=await Network.post(this.base+'/api/login',{'Content-Type':'application/json',Referer:this.base+'/'},JSON.stringify({email,password}));
             if(r.status!==200)throw new Error('Komiic 登录失败，请检查账号、密码及网站验证状态。');
             let data;try{data=JSON.parse(r.body);}catch(_){throw new Error('登录返回非 JSON，请先在网站完成验证。');}
-            if(!data.token)throw new Error('Komiic 没有返回登录令牌。');this.saveData('token',data.token);return 'ok';
+            if(!data.token)throw new Error('Komiic 没有返回登录令牌。');this.resetTickets();this.saveData('token',data.token);return 'ok';
         },
-        loginWithWebview:{url:'https://komiic.cc/',checkStatus:(url,title)=>/^https:\/\/komiic\.cc(?:\/|$)/.test(url||'')&&/Komiic/i.test(title||'')&&!/验证|moment|blocked/i.test(title||'')},
-        logout:()=>{this.deleteData('token');Network.deleteCookies(this.base);}
+        loginWithWebview:{url:'https://komiic.cc/',checkStatus:(url,title)=>/^https:\/\/komiic\.cc(?:\/|$)/.test(url||'')&&/Komiic/i.test(title||'')&&!/验证|moment|blocked/i.test(title||''),onLoginSuccess:()=>this.resetTickets()},
+        logout:()=>{this.resetTickets();this.deleteData('token');Network.deleteCookies(this.base);}
     };
 
     _checkedComic = this.comic;

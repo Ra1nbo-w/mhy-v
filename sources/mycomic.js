@@ -58,6 +58,7 @@ async function fetchWithCFCheck(url) {
     if (isCloudflareChallenge(resp.status, resp.body)) {
         throw "Cloudflare 验证拦截：请在漫画源设置中点击「登录」，在内置浏览器完成验证后重试；若显示 blocked，需检查网络或联系网站，不能保证解除。";
     }
+    if (resp.status !== 200) throw new Error('MYCOMIC 请求失败：HTTP ' + resp.status);
     return resp;
 }
 
@@ -179,7 +180,7 @@ class MyComic extends ComicSource {
 
     key = "mycomic";
 
-    version = "2.3.0";
+    version = "2.3.1";
 
     minAppVersion = "1.16.0";
 
@@ -276,9 +277,11 @@ class MyComic extends ComicSource {
                 const resp = await fetchWithCFCheck(url);
                 if (resp.status !== 200) throw "HTTP " + resp.status;
                 const doc = new HtmlDocument(resp.body);
-                const comics = parseComicList(doc);
-                const maxPage = parseMaxPage(resp.body);
-                return { comics, maxPage };
+                try {
+                    const comics = parseComicList(doc);
+                    const maxPage = parseMaxPage(resp.body);
+                    return { comics, maxPage };
+                } finally { doc.dispose(); }
             },
         },
         {
@@ -290,9 +293,11 @@ class MyComic extends ComicSource {
                 const resp = await fetchWithCFCheck(url);
                 if (resp.status !== 200) throw "HTTP " + resp.status;
                 const doc = new HtmlDocument(resp.body);
-                const comics = parseComicList(doc);
-                const maxPage = parseMaxPage(resp.body);
-                return { comics, maxPage };
+                try {
+                    const comics = parseComicList(doc);
+                    const maxPage = parseMaxPage(resp.body);
+                    return { comics, maxPage };
+                } finally { doc.dispose(); }
             },
         },
         {
@@ -304,9 +309,11 @@ class MyComic extends ComicSource {
                 const resp = await fetchWithCFCheck(url);
                 if (resp.status !== 200) throw "HTTP " + resp.status;
                 const doc = new HtmlDocument(resp.body);
-                const comics = parseComicList(doc);
-                const maxPage = parseMaxPage(resp.body);
-                return { comics, maxPage };
+                try {
+                    const comics = parseComicList(doc);
+                    const maxPage = parseMaxPage(resp.body);
+                    return { comics, maxPage };
+                } finally { doc.dispose(); }
             },
         },
     ];
@@ -420,10 +427,12 @@ class MyComic extends ComicSource {
             if (resp.status !== 200) throw "HTTP " + resp.status;
 
             const doc = new HtmlDocument(resp.body);
-            const comics = parseComicList(doc);
-            const maxPage = parseMaxPage(resp.body);
+            try {
+                const comics = parseComicList(doc);
+                const maxPage = parseMaxPage(resp.body);
 
-            return { comics, maxPage };
+                return { comics, maxPage };
+            } finally { doc.dispose(); }
         },
 
         optionList: [
@@ -454,10 +463,12 @@ class MyComic extends ComicSource {
                 if (resp.status !== 200) throw "HTTP " + resp.status;
 
                 const doc = new HtmlDocument(resp.body);
-                const comics = parseComicList(doc);
-                const maxPage = parseMaxPage(resp.body);
+                try {
+                    const comics = parseComicList(doc);
+                    const maxPage = parseMaxPage(resp.body);
 
-                return { comics, maxPage };
+                    return { comics, maxPage };
+                } finally { doc.dispose(); }
             },
         },
     };
@@ -480,10 +491,12 @@ class MyComic extends ComicSource {
             if (resp.status !== 200) throw "HTTP " + resp.status;
 
             const doc = new HtmlDocument(resp.body);
-            const comics = parseComicList(doc);
-            const maxPage = parseMaxPage(resp.body);
+            try {
+                const comics = parseComicList(doc);
+                const maxPage = parseMaxPage(resp.body);
 
-            return { comics, maxPage };
+                return { comics, maxPage };
+            } finally { doc.dispose(); }
         },
 
         optionList: [
@@ -512,100 +525,102 @@ class MyComic extends ComicSource {
 
             const html = resp.body;
             const doc = new HtmlDocument(html);
+            try {
 
-            // Parse meta tags
-            let title = getMetaContent(html, "og:title") || id;
-            title = title.replace(/\s*-\s*MYCOMIC.*$/, "").trim();
+                // Parse meta tags
+                let title = getMetaContent(html, "og:title") || id;
+                title = title.replace(/\s*-\s*MYCOMIC.*$/, "").trim();
 
-            const description = getMetaContent(html, "description") || "";
-            const author = getMetaContent(html, "author") || "";
-            const cover =
-                getMetaContent(html, "og:image") ||
-                CDN_URL + "/comics/" + id + ".jpg";
-            const keywords = getMetaContent(html, "keywords") || "";
+                const description = getMetaContent(html, "description") || "";
+                const author = getMetaContent(html, "author") || "";
+                const cover =
+                    getMetaContent(html, "og:image") ||
+                    CDN_URL + "/comics/" + id + ".jpg";
+                const keywords = getMetaContent(html, "keywords") || "";
 
-            // Parse tags from filter links on the page
-            const tags = new Map();
-            const tagLinks = doc.querySelectorAll(
-                "a[href*='filter%5Btag%5D']"
-            );
-            const tagNames = [];
-            tagLinks.forEach((a) => {
-                const text = a.text.trim();
-                if (text) tagNames.push(text);
-            });
-            if (tagNames.length) tags.set("类型", tagNames);
+                // Parse tags from filter links on the page
+                const tags = new Map();
+                const tagLinks = doc.querySelectorAll(
+                    "a[href*='filter%5Btag%5D']"
+                );
+                const tagNames = [];
+                tagLinks.forEach((a) => {
+                    const text = a.text.trim();
+                    if (text) tagNames.push(text);
+                });
+                if (tagNames.length) tags.set("类型", tagNames);
 
-            // Parse additional info from keywords
-            const keywordList = keywords
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean);
-            if (author) tags.set("作者", [author]);
+                // Parse additional info from keywords
+                const keywordList = keywords
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                if (author) tags.set("作者", [author]);
 
-            // Try to extract country and audience from keywords
-            const countryMap = {
-                日本: "日本",
-                内地: "内地",
-                韩国: "韩国",
-                欧美: "欧美",
-                港台: "港台",
-                其他: "其他",
-            };
-            const audienceMap = {
-                少年: "少年",
-                少女: "少女",
-                青年: "青年",
-                儿童: "儿童",
-                通用: "通用",
-            };
-            const countries = [];
-            const audiences = [];
-            keywordList.forEach((kw) => {
-                if (countryMap[kw]) countries.push(kw);
-                if (audienceMap[kw]) audiences.push(kw);
-            });
-            if (countries.length) tags.set("地区", countries);
-            if (audiences.length) tags.set("受众", audiences);
+                // Try to extract country and audience from keywords
+                const countryMap = {
+                    日本: "日本",
+                    内地: "内地",
+                    韩国: "韩国",
+                    欧美: "欧美",
+                    港台: "港台",
+                    其他: "其他",
+                };
+                const audienceMap = {
+                    少年: "少年",
+                    少女: "少女",
+                    青年: "青年",
+                    儿童: "儿童",
+                    通用: "通用",
+                };
+                const countries = [];
+                const audiences = [];
+                keywordList.forEach((kw) => {
+                    if (countryMap[kw]) countries.push(kw);
+                    if (audienceMap[kw]) audiences.push(kw);
+                });
+                if (countries.length) tags.set("地区", countries);
+                if (audiences.length) tags.set("受众", audiences);
 
-            // Parse chapter list from Alpine.js x-data
-            // The x-data attribute contains: chapters: [{"id":96338,"title":"第16回"}, ...]
-            const chapters = new Map();
-            const chapterMatch = /chapters:\s*(\[[\s\S]*?\])/.exec(html);
-            if (chapterMatch) {
-                try {
-                    const chapterList = JSON.parse(chapterMatch[1]);
-                    chapterList.forEach((ch) => {
-                        chapters.set(String(ch.id), ch.title);
-                    });
-                } catch (e) {
-                    // Fallback: try to find chapter links in the page
-                    const chapterLinks = doc.querySelectorAll(
-                        "a[href*='/cn/chapters/']"
-                    );
-                    chapterLinks.forEach((a) => {
-                        const href = a.attributes["href"] || "";
-                        const m = /\/cn\/chapters\/(\d+)/.exec(href);
-                        if (m) {
-                            const chTitle = a.text.trim();
-                            if (chTitle && !chapters.has(m[1])) {
-                                chapters.set(m[1], chTitle);
+                // Parse chapter list from Alpine.js x-data
+                // The x-data attribute contains: chapters: [{"id":96338,"title":"第16回"}, ...]
+                const chapters = new Map();
+                const chapterMatch = /chapters:\s*(\[[\s\S]*?\])/.exec(html);
+                if (chapterMatch) {
+                    try {
+                        const chapterList = JSON.parse(chapterMatch[1]);
+                        chapterList.forEach((ch) => {
+                            chapters.set(String(ch.id), ch.title);
+                        });
+                    } catch (e) {
+                        // Fallback: try to find chapter links in the page
+                        const chapterLinks = doc.querySelectorAll(
+                            "a[href*='/cn/chapters/']"
+                        );
+                        chapterLinks.forEach((a) => {
+                            const href = a.attributes["href"] || "";
+                            const m = /\/cn\/chapters\/(\d+)/.exec(href);
+                            if (m) {
+                                const chTitle = a.text.trim();
+                                if (chTitle && !chapters.has(m[1])) {
+                                    chapters.set(m[1], chTitle);
+                                }
                             }
-                        }
-                    });
+                        });
+                    }
                 }
-            }
 
-            return new ComicDetails({
-                title: title,
-                cover: cover,
-                description: description,
-                tags: tags,
-                chapters: chapters,
-                thumbnails: [cover],
-                url: url,
-                uploader: author || undefined,
-            });
+                return new ComicDetails({
+                    title: title,
+                    cover: cover,
+                    description: description,
+                    tags: tags,
+                    chapters: chapters,
+                    thumbnails: [cover],
+                    url: url,
+                    uploader: author || undefined,
+                });
+            } finally { doc.dispose(); }
         },
 
         loadEp: async (comicId, epId) => {
@@ -617,37 +632,39 @@ class MyComic extends ComicSource {
             if (resp.status !== 200) throw "HTTP " + resp.status;
 
             const doc = new HtmlDocument(resp.body);
-            // Chapter images have class "page" and src or data-src from biccam.com/chapters/
-            const imgs = doc.querySelectorAll("img.page");
-            const images = [];
+            try {
+                // Chapter images have class "page" and src or data-src from biccam.com/chapters/
+                const imgs = doc.querySelectorAll("img.page");
+                const images = [];
 
-            if (imgs.length > 0) {
-                imgs.forEach((img) => {
-                    let src =
-                        img.attributes["data-src"] ||
-                        img.attributes["src"] ||
-                        "";
-                    if (src && src.indexOf("biccam.com/chapters/") !== -1) {
-                        images.push(src);
-                    }
-                });
-            }
+                if (imgs.length > 0) {
+                    imgs.forEach((img) => {
+                        let src =
+                            img.attributes["data-src"] ||
+                            img.attributes["src"] ||
+                            "";
+                        if (src && src.indexOf("biccam.com/chapters/") !== -1) {
+                            images.push(src);
+                        }
+                    });
+                }
 
-            // Fallback: find all imgs with src containing biccam.com/chapters/
-            if (images.length === 0) {
-                const allImgs = doc.querySelectorAll("img");
-                allImgs.forEach((img) => {
-                    let src =
-                        img.attributes["data-src"] ||
-                        img.attributes["src"] ||
-                        "";
-                    if (src && src.indexOf("biccam.com/chapters/") !== -1) {
-                        images.push(src);
-                    }
-                });
-            }
+                // Fallback: find all imgs with src containing biccam.com/chapters/
+                if (images.length === 0) {
+                    const allImgs = doc.querySelectorAll("img");
+                    allImgs.forEach((img) => {
+                        let src =
+                            img.attributes["data-src"] ||
+                            img.attributes["src"] ||
+                            "";
+                        if (src && src.indexOf("biccam.com/chapters/") !== -1) {
+                            images.push(src);
+                        }
+                    });
+                }
 
-            return { images: images };
+                return { images: images };
+            } finally { doc.dispose(); }
         },
 
         onImageLoad: (url, comicId, epId) => {

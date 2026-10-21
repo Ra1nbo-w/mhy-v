@@ -1,6 +1,6 @@
 // 漫蛙单源线路版：只适配 manwa.me 同一站点的线路，不包含旧多站聚合。
 class Manwa extends ComicSource {
-    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
+    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
     pendingRoute=null; activeBase='';
     settings={
         line:{title:'线路选择',type:'select',options:[{value:'auto',text:'自动（缓存 / 备用入口 / 走失恢复）'},{value:'backup',text:'备用入口 fuwbn.cc/mw666'},{value:'permanent',text:'永久地址 manwa.me'},{value:'manual',text:'手动地址'}],default:'auto'},
@@ -144,17 +144,24 @@ class Manwa extends ComicSource {
         {options:['latest-最新','oldest-最旧','favorite-收藏','newest-新漫']},
         {options:['-全部面向','2-一般向','0-BL向','1-禁漫','3-TL向','4-GL向']}
     ],load:async(c,param,o=[],p=1)=>{
-        const selected={area:o[0]||'',end:o[1]||'',sort:({latest:'-1',oldest:'0',favorite:'1',newest:'2'}[o[2]]??'-1'),gender:o[3]||'-1'};
+        const selected={tag:'',area:o[0]||'',end:o[1]||'',sort:({latest:'-1',oldest:'0',favorite:'1',newest:'2'}[o[2]]??'-1'),gender:o[3]||'-1',has_full:'-1',level:'-1'};
         if(String(param).startsWith('/')){
             if(!/^\/(?:update|rank|booklist)(?:\?[^#\s]*)?$/.test(param))throw new Error('未知漫蛙分类。');
             if(!param.startsWith('/booklist'))return this.list(param,p);
+            for(const entry of (param.split('?')[1]||'').split('&')){
+                if(!entry)continue;
+                const equal=entry.indexOf('='),key=decodeURIComponent(equal<0?entry:entry.slice(0,equal));
+                if(Object.prototype.hasOwnProperty.call(selected,key))selected[key]=decodeURIComponent((equal<0?'':entry.slice(equal+1)).replace(/\+/g,' '));
+            }
         }else if(/^(?:area|end|gender):\d+$/.test(String(param))){
             const [key,value]=param.split(':');selected[key]=value;
             param='/booklist';
-        }else if(!this.category.parts[0].categoryParams.includes(param))throw new Error('未知漫蛙题材。');
-        const query='area='+encodeURIComponent(selected.area)+'&end='+encodeURIComponent(selected.end)+'&gender='+encodeURIComponent(selected.gender)+'&sort='+encodeURIComponent(selected.sort)+'&has_full=-1&level=-1';
-        if(param==='/booklist')return this.list('/booklist?tag=&'+query,p);
-        return this.list('/booklist?tag='+encodeURIComponent(param)+'&'+query,p);
+        }else{
+            if(!this.category.parts[0].categoryParams.includes(param))throw new Error('未知漫蛙题材。');
+            selected.tag=param;
+        }
+        const query=Object.keys(selected).map(key=>key+'='+encodeURIComponent(selected[key])).join('&');
+        return this.list('/booklist?'+query,p);
     }};
     comic={
         loadInfo:async id=>{

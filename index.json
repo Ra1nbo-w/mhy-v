@@ -2,7 +2,7 @@
   {
     "name": "漫蛙漫画",
     "key": "manwa_routes",
-    "version": "2.3.0",
+    "version": "2.3.1",
     "fileName": "sources/manwa.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js",
     "description": "漫蛙单站选线；分类页新增地区、面向和进度入口，筛选支持新漫排序。线路可达性视网络而定。"
@@ -18,7 +18,7 @@
   {
     "name": "Komiic漫画",
     "key": "komiic_cc",
-    "version": "2.3.0",
+    "version": "2.3.1",
     "fileName": "sources/komiic.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js",
     "description": "Komiic 分类按网站公开 allCategory 接口分为七组；搜索、阅读及图片票据仍受网站额度限制。"

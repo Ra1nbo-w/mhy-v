@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.3.0";
+  version = "2.3.1";
 
   minAppVersion = "1.18.0";
 
@@ -165,18 +165,20 @@ class Baozi extends ComicSource {
           throw "Invalid status code: " + res.status;
         }
         let document = new HtmlDocument(res.body);
-        let parts = document.querySelectorAll("div.index-recommend-items");
-        let result = {};
-        for (let part of parts) {
-          let title = part.querySelector("div.catalog-title").text.trim();
-          let comics = part
-            .querySelectorAll("div.comics-card")
-            .map((e) => this.parseComic(e));
-          if (comics.length > 0) {
-            result[title] = comics;
+        try {
+          let parts = document.querySelectorAll("div.index-recommend-items");
+          let result = {};
+          for (let part of parts) {
+            let title = part.querySelector("div.catalog-title").text.trim();
+            let comics = part
+              .querySelectorAll("div.comics-card")
+              .map((e) => this.parseComic(e));
+            if (comics.length > 0) {
+              result[title] = comics;
+            }
           }
-        }
-        return result;
+          return result;
+        } finally { document.dispose(); }
       },
     },
   ];
@@ -304,13 +306,15 @@ class Baozi extends ComicSource {
         throw "Invalid status code: " + res.status;
       }
       let document = new HtmlDocument(res.body);
-      let comics = document
-        .querySelectorAll("div.comics-card")
-        .map((e) => this.parseComic(e));
-      return {
-        comics: comics,
-        maxPage: 1,
-      };
+      try {
+        let comics = document
+          .querySelectorAll("div.comics-card")
+          .map((e) => this.parseComic(e));
+        return {
+          comics: comics,
+          maxPage: 1,
+        };
+      } finally { document.dispose(); }
     },
 
     // 提供选项
@@ -351,33 +355,35 @@ class Baozi extends ComicSource {
         throw "Invalid status code: " + res.status;
       }
       let document = new HtmlDocument(res.body);
-      function parseComic(e) {
-        let title = e.querySelector("h4 > a").text.trim();
-        let url = e.querySelector("h4 > a").attributes["href"];
-        let id = url.split("/").pop();
-        let author = e
-          .querySelector("div.info > ul")
-          .children[1].text.split("：")[1]
-          .trim();
-        let description = e
-          .querySelector("div.info > ul")
-          .children[4].children[0].text.trim();
+      try {
+        function parseComic(e) {
+          let title = e.querySelector("h4 > a").text.trim();
+          let url = e.querySelector("h4 > a").attributes["href"];
+          let id = url.split("/").pop();
+          let author = e
+            .querySelector("div.info > ul")
+            .children[1].text.split("：")[1]
+            .trim();
+          let description = e
+            .querySelector("div.info > ul")
+            .children[4].children[0].text.trim();
 
+          return {
+            id: id,
+            title: title,
+            subTitle: author,
+            description: description,
+            cover: e.querySelector("amp-img").attributes["src"],
+          };
+        }
+        let comics = document
+          .querySelectorAll("div.bookshelf-items")
+          .map((e) => parseComic(e));
         return {
-          id: id,
-          title: title,
-          subTitle: author,
-          description: description,
-          cover: e.querySelector("amp-img").attributes["src"],
+          comics: comics,
+          maxPage: 1,
         };
-      }
-      let comics = document
-        .querySelectorAll("div.bookshelf-items")
-        .map((e) => parseComic(e));
-      return {
-        comics: comics,
-        maxPage: 1,
-      };
+      } finally { document.dispose(); }
     },
   };
 
@@ -390,102 +396,104 @@ class Baozi extends ComicSource {
         throw "Invalid status code: " + res.status;
       }
       let document = new HtmlDocument(res.body);
+      try {
 
-      let title = document.querySelector("h1.comics-detail__title").text.trim();
-      let cover = document.querySelector("div.l-content > div > div > amp-img")
-        .attributes["src"];
-      let author = document
-        .querySelector("h2.comics-detail__author")
-        .text.trim();
-      let tags = document
-        .querySelectorAll("div.tag-list > span")
-        .map((e) => e.text.trim());
-      tags = [...tags.filter((e) => e !== "")];
-      let updateTime = document
-        .querySelector("div.supporting-text > div > span > em")
-        ?.text.trim()
-        .replace("(", "")
-        .replace(")", "");
-      if (!updateTime) {
-        const getLastChapterText = () => {
-          // 合并所有章节容器（处理可能存在多个列表的情况）
-          const containers = [
-            ...document.querySelectorAll(
-              "#chapter-items, #chapters_other_list"
-            ),
-          ];
-          let allChapters = [];
-          containers.forEach((container) => {
-            const chapters = container.querySelectorAll(".comics-chapters > a");
-            allChapters.push(...Array.from(chapters));
-          });
-          const lastChapter = allChapters[allChapters.length - 1];
-          return (
-            lastChapter?.querySelector("div > span")?.text.trim() ||
-            "暂无更新信息"
-          );
-        };
-        updateTime = getLastChapterText();
-      }
-      let description = document
-        .querySelector("p.comics-detail__desc")
-        .text.trim();
-      let chapters = new Map();
-      let i = 0;
-      for (let c of document.querySelectorAll(
-        "div#chapter-items > div.comics-chapters > a > div > span"
-      )) {
-        chapters.set(i.toString(), c.text.trim());
-        i++;
-      }
-      for (let c of document.querySelectorAll(
-        "div#chapters_other_list > div.comics-chapters > a > div > span"
-      )) {
-        chapters.set(i.toString(), c.text.trim());
-        i++;
-      }
-      if (i === 0) {
-        // 将倒序的最新章节反转
-        const spans = Array.from(
-          document.querySelectorAll("div.comics-chapters > a > div > span")
-        ).reverse();
-        for (let c of spans) {
+        let title = document.querySelector("h1.comics-detail__title").text.trim();
+        let cover = document.querySelector("div.l-content > div > div > amp-img")
+          .attributes["src"];
+        let author = document
+          .querySelector("h2.comics-detail__author")
+          .text.trim();
+        let tags = document
+          .querySelectorAll("div.tag-list > span")
+          .map((e) => e.text.trim());
+        tags = [...tags.filter((e) => e !== "")];
+        let updateTime = document
+          .querySelector("div.supporting-text > div > span > em")
+          ?.text.trim()
+          .replace("(", "")
+          .replace(")", "");
+        if (!updateTime) {
+          const getLastChapterText = () => {
+            // 合并所有章节容器（处理可能存在多个列表的情况）
+            const containers = [
+              ...document.querySelectorAll(
+                "#chapter-items, #chapters_other_list"
+              ),
+            ];
+            let allChapters = [];
+            containers.forEach((container) => {
+              const chapters = container.querySelectorAll(".comics-chapters > a");
+              allChapters.push(...Array.from(chapters));
+            });
+            const lastChapter = allChapters[allChapters.length - 1];
+            return (
+              lastChapter?.querySelector("div > span")?.text.trim() ||
+              "暂无更新信息"
+            );
+          };
+          updateTime = getLastChapterText();
+        }
+        let description = document
+          .querySelector("p.comics-detail__desc")
+          .text.trim();
+        let chapters = new Map();
+        let i = 0;
+        for (let c of document.querySelectorAll(
+          "div#chapter-items > div.comics-chapters > a > div > span"
+        )) {
           chapters.set(i.toString(), c.text.trim());
           i++;
         }
-      }
-      let recommend = [];
-      for (let c of document.querySelectorAll("div.recommend--item")) {
-        if (c.querySelectorAll("div.tag-comic").length > 0) {
-          let title = c.querySelector("span").text.trim();
-          let cover = c.querySelector("amp-img").attributes["src"];
-          let url = c.querySelector("a").attributes["href"];
-          let id = url.split("/").pop();
-          recommend.push({
-            id: id,
-            title: title,
-            cover: cover,
-          });
+        for (let c of document.querySelectorAll(
+          "div#chapters_other_list > div.comics-chapters > a > div > span"
+        )) {
+          chapters.set(i.toString(), c.text.trim());
+          i++;
         }
-      }
-      // updateTime 将 Y年 M月 D日 转化为 Y-M-D
-      let updateDate = updateTime
-        .replace(/年/g, "-")
-        .replace(/月/g, "-")
-        .replace(/日/g, "");
+        if (i === 0) {
+          // 将倒序的最新章节反转
+          const spans = Array.from(
+            document.querySelectorAll("div.comics-chapters > a > div > span")
+          ).reverse();
+          for (let c of spans) {
+            chapters.set(i.toString(), c.text.trim());
+            i++;
+          }
+        }
+        let recommend = [];
+        for (let c of document.querySelectorAll("div.recommend--item")) {
+          if (c.querySelectorAll("div.tag-comic").length > 0) {
+            let title = c.querySelector("span").text.trim();
+            let cover = c.querySelector("amp-img").attributes["src"];
+            let url = c.querySelector("a").attributes["href"];
+            let id = url.split("/").pop();
+            recommend.push({
+              id: id,
+              title: title,
+              cover: cover,
+            });
+          }
+        }
+        // updateTime 将 Y年 M月 D日 转化为 Y-M-D
+        let updateDate = updateTime
+          .replace(/年/g, "-")
+          .replace(/月/g, "-")
+          .replace(/日/g, "");
 
-      return new ComicDetails({
-        title: title,
-        cover: cover,
-        description: description,
-        tags: {
-          作者: [author],
-          标签: tags,
-        },
-        chapters: chapters,
-        recommend: recommend,
-        updateTime: updateDate,
-      });
+        return new ComicDetails({
+          title: title,
+          cover: cover,
+          description: description,
+          tags: {
+            作者: [author],
+            标签: tags,
+          },
+          chapters: chapters,
+          recommend: recommend,
+          updateTime: updateDate,
+        });
+      } finally { document.dispose(); }
     },
     loadEp: async (comicId, epId) => {
       const images = [];
@@ -499,21 +507,25 @@ class Baozi extends ComicSource {
       }
 
       const doc = new HtmlDocument(res.body);
+      try {
 
-      // 解析当前页图片(App 版)
-      const imageNodes = doc.querySelectorAll(".comic-contain > .chapter-img");
-      imageNodes.forEach((imgNode) => {
-        let imgUrl = imgNode.querySelector(".comic-contain__item")?.attributes?.["data-src"];
-        if (imgUrl) {
-          const match = imgUrl.match(/^(https?:\/\/)?([^/\s:]+)(:\d+)?(\/[a-z]comic\/.*)/);
-          if (match) {
-            const domain = this.loadSetting("cdn_domains") === "" ? match[2] : this.loadSetting("cdn_domains");
-            imgUrl = `${match[1]}${domain}${this.loadSetting("image_quality")}${match[4]}`;
+        // 解析当前页图片(App 版)
+        const imageNodes = doc.querySelectorAll(".comic-contain > .chapter-img");
+        imageNodes.forEach((imgNode) => {
+          let imgUrl = imgNode.querySelector(".comic-contain__item")?.attributes?.["data-src"];
+          if (imgUrl) {
+            if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
+            const match = imgUrl.match(/^(https?:\/\/)?([^/\s:]+)(:\d+)?(\/[a-z]comic\/.*)/);
+            if (match) {
+              const domain = this.loadSetting("cdn_domains") === "" ? match[2] : this.loadSetting("cdn_domains");
+              imgUrl = `${match[1] || 'https://'}${domain}${this.loadSetting("image_quality")}${match[4]}`;
+            }
+            images.push(imgUrl);
           }
-          images.push(imgUrl);
-        }
-      });
-      return { images: images };
+        });
+        if (!images.length) throw new Error('包子章节未取得图片，请检查验证状态或网站章节是否可读。');
+        return { images: images };
+      } finally { doc.dispose(); }
     },
   };
 
