@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.2.2";
+  version = "2.2.3";
 
   minAppVersion = "1.18.0";
 
@@ -518,7 +518,20 @@ class Baozi extends ComicSource {
   };
 
   // __Host- 验证 Cookie 不能跨主机复用；网页登录与目录请求使用同一主机。
-  get baseUrl(){return 'https://www.baozimh.com';}
+  get loginHost() {
+    const host = this.loadSetting('loginHost');
+    return ['cn.bzmgcn.com', 'www.baozimh.com'].includes(host) ? host : 'cn.bzmgcn.com';
+  }
+  websiteOrigin(url) {
+    const match = /^https:\/\/(?:cn\.bzmgcn\.com|www\.baozimh\.com)(?=\/|[?#]|$)/.exec(url || '');
+    return match ? match[0] : null;
+  }
+  get baseUrl() {
+    const session = this.loadData('_baoziWebLogin');
+    if (session && session.entryHost === this.loginHost &&
+        this.websiteOrigin(session.origin) === session.origin) return session.origin;
+    return 'https://' + this.loginHost;
+  }
   get browserUA(){
     const manual = (this.loadSetting('browserUA') || '').trim();
     // 旧版默认值不是本机 WebView 的身份，升级后不能继续当作有效配置。
@@ -535,16 +548,15 @@ class Baozi extends ComicSource {
     return /__gatekeeper_challenge|正在验证浏览器|正在驗證瀏覽器|Sorry,\s*you have been blocked|<title[^>]*>[^<]*(?:just a moment|验证|驗證|checking your browser)|window\._cf_chl_opt/i.test(body || '');
   }
   verificationError() {
-    return new Error('包子网页会话尚未通过源请求检查。请在本源“登录 → 网页登录”完成验证，等待应用自动返回，再点“检查验证”。不要从外部浏览器验证后直接返回。' +
-      (this.browserUA ? ' 若仍失败，请保持验证与请求使用相同网络，并重新验证。' :
-        ' 当前应用未提供本机 WebView 标识；需配套应用补丁，或在高级设置填写本机内置 WebView 的实际 User-Agent（不能套用其他设备的值）。'));
+    return new Error('包子源请求在 ' + this.baseUrl + ' 被拦截。请在本源内置网页登录，登录后进入“我的书架”并等待自动返回，再点“检查会话保存”和“检查验证”。Cookie 已保存也可能仍被网站拦截；这条错误本身不能证明 Cookie 未保存。请保持网页登录与源请求使用同一网络。');
   }
   // 将站点自己的验证页识别为需要人工处理，不能把它保存为图片。
   async getChecked(url, headers, extra) {
     const requestHeaders={...headers};
-    if(/^https:\/\/www\.baozimh\.com(?:\/|$)/.test(url)){
-      if (this.browserUA) requestHeaders['User-Agent']=this.browserUA;
-      requestHeaders['Referer']=this.baseUrl+'/';
+    const origin = this.websiteOrigin(url);
+    if(origin){
+      if (this.browserUA && origin === this.baseUrl) requestHeaders['User-Agent']=this.browserUA;
+      requestHeaders['Referer']=origin+'/';
       // 不重复读取验证前缓存的页面；不手工复制跨域 Cookie。
       requestHeaders['cache-time']='no';
     }
@@ -575,35 +587,44 @@ class Baozi extends ComicSource {
       throw new Error('网站账号尚未同步：请在内置网页登录后点击“我的书架”，等待自动返回。若停在主页，请先进入书架；验证通过不等于账号登录。');
     }
   }
-  account = {
+  account = (()=> {
+    const source=this;
+    return {
     logout: ()=>Network.deleteCookies(this.baseUrl),
     loginWithWebview: {
       // Account login must reach the bookshelf, not a public classification page.
-      url:'https://www.baozimh.com/user/my_bookshelf',
+      get url(){return source.baseUrl+'/user/my_bookshelf';},
       checkStatus:(url,title)=> {
-        if (!/^https:\/\/www\.baozimh\.com\/user\/my_bookshelf\/?(?:[?#].*)?$/.test(url || '')) return false;
+        const origin = this.websiteOrigin(url);
+        if (!origin || !/^\/user\/my_bookshelf\/?(?:[?#].*)?$/.test(url.slice(origin.length))) return false;
         if (/验证|驗證|moment|blocked|Cloudflare|gatekeeper|checking|登录|登入|login|sign\s*in/i.test(title || '')) return false;
-        return /书架|書架/.test(title || '');
-      },
-      onLoginSuccess:async()=> {
-        try {
-          await this.checkWebsiteAccount();
-        } catch (error) {
-          // The host writes its account flag before this callback. Undo it on
-          // failure so a public page/failed request cannot leave a fake login.
-          this.deleteData('account');
-          throw error;
+        if (!/书架|書架/.test(title || '')) return false;
+        // The host captures cookies from this exact landing URL. Keep later
+        // requests on its origin; never transplant __Host- cookies to another.
+        const session = this.loadData('_baoziWebLogin');
+        if (!session || session.origin !== origin || session.entryHost !== this.loginHost) {
+          this.saveData('_baoziWebLogin', {origin, entryHost:this.loginHost});
         }
-        UI.showMessage('网站账号已同步，源请求已确认登录后的书架。');
-      }
+        return true;
+      },
+      // Cookie capture has already completed here. An unrelated blocked HTTP
+      // request must not prevent the host from returning to the app.
+      onLoginSuccess:()=>UI.showMessage('内置网页会话已保存（'+this.baseUrl+'）。可点“检查会话保存”确认 Cookie，再检查登录同步。')
     }
-  };
-  // 网页验证固定在默认实际主机；切换域名后应在对应网站重新验证。
-  settings = {...this.settings,
-    domains:{title:'主域名（与本次验证主机一致）',type:'select',options:[{value:'baozimh.com',text:'www.baozimh.com'}],default:'baozimh.com'},
-    browserUA:{title:'高级：本机内置 WebView User-Agent（留空使用配套应用自动同步值）',type:'input',default:'',validator:null},
+    };
+  })();
+  sourceSettings = Object.fromEntries(Object.entries(this.settings).filter(([key])=>key !== 'domains'));
+  settings = {...this.sourceSettings,
+    loginHost:{title:'登录入口（切换后重新登录；请求跟随登录成功的站点）',type:'select',options:[{value:'cn.bzmgcn.com',text:'cn.bzmgcn.com'},{value:'www.baozimh.com',text:'www.baozimh.com'}],default:'cn.bzmgcn.com'},
+    browserUA:{title:'高级：本机内置 WebView User-Agent（可留空）',type:'input',default:'',validator:null},
     language:{title:'语言（验证入口使用简体线路）',type:'select',options:[{value:'cn',text:'简体'}],default:'cn'},
     website:{title:'外部浏览器（仅查看网站，不会同步验证）',type:'callback',buttonText:'打开网站',callback:()=>UI.launchUrl(this.baseUrl)},
+    savedSession:{title:'仅检查本机已保存 Cookie（不联网、不显示 Cookie 值）',type:'callback',buttonText:'检查会话保存',callback:()=>{
+      const cookies=Network.getCookies(this.baseUrl+'/user/my_bookshelf') || [];
+      const hasAccount=cookies.some(c=>c.name === 'TSID' && !!c.value);
+      const hasVerification=cookies.some(c=>/^__Host-(?:gk_browser_|gk_clearance_)|^cf_clearance$/.test(c.name) && !!c.value);
+      UI.showMessage('当前站点：'+this.baseUrl+'；可用 Cookie '+cookies.length+' 项；账号 Cookie：'+(hasAccount?'已保存':'未发现')+'；验证 Cookie：'+(hasVerification?'已保存':'未发现')+'。这里只检查保存状态，不代表源请求已通过网站验证。');
+    }},
     checkSession:{title:'网页登录后检查源请求',type:'callback',buttonText:'检查登录同步',callback:async()=>{
       await this.checkWebsiteAccount();
       UI.showMessage('源请求能读取登录后的书架；返回发现页刷新。');
