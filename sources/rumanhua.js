@@ -3,7 +3,7 @@
 class Rumanhua extends ComicSource {
     name = "如漫画";
     key = "rumanhua_com";
-    version = "2.1.1";
+    version = "2.1.2";
     minAppVersion = "1.16.0";
     url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/rumanhua.js";
     base = "http://rumanhua2.com";
@@ -164,14 +164,5 @@ class Rumanhua extends ComicSource {
         if(!Array.isArray(images)||!images.length||images.some(u=>typeof u!=='string'||!/^https?:\/\//.test(u)))throw new Error('章节没有有效图片。');
         return images;
     }
-
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
 
 }

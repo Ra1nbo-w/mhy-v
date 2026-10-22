@@ -1,6 +1,6 @@
 // 漫蛙单源线路版：只适配 manwa.me 同一站点的线路，不包含旧多站聚合。
 class Manwa extends ComicSource {
-    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.2"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
+    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.3"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
     pendingRoute=null; activeBase='';
     settings={
         line:{title:'线路选择',type:'select',options:[{value:'auto',text:'自动（缓存 / 备用入口 / 走失恢复）'},{value:'backup',text:'备用入口 fuwbn.cc/mw666'},{value:'permanent',text:'永久地址 manwa.me'},{value:'manual',text:'手动地址'}],default:'auto'},
@@ -178,7 +178,15 @@ class Manwa extends ComicSource {
                     if(match)chapters['ep_'+match[1]]=a.text.trim();
                 }
                 if(!Object.keys(chapters).length)throw new Error('漫蛙目录为空，可能需要登录或网站已改版。');
-                return new ComicDetails({title,cover:this.absolute(img.attributes['data-original']||img.attributes.src,r.base),description:doc.querySelector('.detail-main-info-content')?.text.trim()||'',chapters});
+                // 详情页没有「题材」字样，只有指向 /booklist/?tag=<题材> 的链接。
+                const tags={},genres=[],seenGenre={};
+                for(const a of doc.querySelectorAll('a')){
+                    const name=a.text.trim();
+                    if(!/\/booklist\/\?tag=/.test(a.attributes.href||'')||!name||name.length>12||seenGenre[name])continue;
+                    seenGenre[name]=true;genres.push(name);
+                }
+                if(genres.length)tags['题材']=genres;
+                return new ComicDetails({title,cover:this.absolute(img.attributes['data-original']||img.attributes.src,r.base),description:doc.querySelector('.detail-main-info-content')?.text.trim()||'',tags,chapters});
             }finally{doc.dispose();}
         },
         loadEp:async(id,ep)=>{
@@ -208,14 +216,6 @@ class Manwa extends ComicSource {
             return {url:target,headers:{Referer:base+'/'}};
         }
     };
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
 
 }
 

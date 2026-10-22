@@ -48,13 +48,57 @@
 
 这些是离线模拟回归，不代替 Android/Windows 实机阅读、网站登录或下载验证。
 
+## 2.3.3
+
+- 包子：`loadEp` 改为多候选章节页（登录同源 → `cn.twbzmg.com` → `cn.cnbzmg.com` → `appcn`）。挂代理访问时 `/user/page_direct` 落到 twbzmg、直连落到 cnbzmg；图片选择器同时兼容「`.comic-contain` 直包 `.comic-contain__item`」的现行结构与旧的 `.chapter-img` 包裹；失败时拼出每个候选的原因。
+- 包子：`updateTime` 恢复。详情页文本是 `(2026年06月28日 更新)`，旧代码只去掉括号，末尾“更新”让日期正则必然不匹配。
+- 包子：`websiteOrigin` 承认两个章节镜像主机（只用于 `Referer`、`cache-time` 与同一份 WebView UA，不搬 `__Host-` Cookie、不改登录入口）。
+- MYCOMIC：搜索排序选项改为 `id/update/views` 三键并在 `load` 里补 `-` 前缀；旧写法前导 `-` 会让三个 key 全塌成空串，排序恒不生效。
+- MYCOMIC：恢复 `loginWithCookies`。`account` 在文件后半段被重新赋值时丢掉了它；原 `validate` 引用了未定义的 `headers`，异常被自身 `catch` 吞掉，等于永远返回 false。现在写入 Cookie 后用一次详情页请求判定。
+- 漫画屋：`account.loginWithWebview.url` 从首页改为 `https://mhua5.com/index.php/category/tags/6`。实测首页、详情页 200，分类页 / 进度页 / `?page=2` 一律 403 Cloudflare「Just a moment」——验证是路径级的，开首页永远拿不到 `cf_clearance`。`checkStatus` 同时要求「落在分类页 + 有真实标题 + 不是挑战页」。
+- 漫画屋：`loadInfo` 增加 `题材`（`a[href*="/index.php/category/tags/"]` 的链接文本），与原 `作者` 并列。
+- 漫蛙：`loadInfo` 增加 `题材`。详情页没有「题材」字样，只有 `/booklist/?tag=<题材>` 链接。
+- 拷贝：`loadInfo` 增加 `题材`（`theme=` 链接）、`状态`（「狀態」行）、`updateTime`（「最後更新」行）。站点文案是繁体，正则以繁体匹配。
+- 漫自由：`loadInfo` 显式返回 `tags: {}`。文件站详情只有卷目录，缺 `tags` 会被宿主判成 `Invalid data`。
+- 八个源：删除文件末尾的 `_checkedComic` 包装。它只兜底 `tags`，五个源本就返回标签，其余三个已改为显式返回；其中的 `instanceof Map` 分支永不成立。
+- `tools/test-source-lifecycle.cjs`：包子 `loadEp` 允许最多 4 个文档（多候选），其余解析器仍要求恰好 1 个且无泄漏。
+- `.gitignore` 增加 `.audit/`、`.probe/`，线上核对用的临时克隆与探针不进入仓库。
+
+### 2.3.3 登录
+
+宿主侧的契约（`lib/features/comic_source/source_account_parser.dart`）：`loginWithWebview.checkStatus(url, title)` 走 `consumeSynchronous`，**必须同步**返回 bool；`onLoginSuccess()` 走 `runCodeToCompletion`，可以 async；`loginWithCookies.validate(values)` 可以 async，但必须 resolve 成 bool；`account.login` 成功后宿主自动把 `[账号, 密码]` 存进源数据的 `account` 键。
+
+- 包子：`checkStatus` 是普通函数，宿主以 `source.account.loginWithWebview.checkStatus(...)` 调用时 `this` 指向配置对象而不是源实例，旧代码里的 `this.websiteOrigin(...)`、`this.loginHost`、`this.loadData(...)` 必抛 `TypeError`——网页登录从来没有成功过。现在全部改用 IIFE 闭包里的 `source`。另加：登录成功回读 Cookie 并报告是否拿到 `TSID`、手动粘贴 `TSID` 的兜底、`registerWebsite`，删除已被覆盖且引用着已删除 `settings.domains` 的旧 `account`。
+- 漫画屋：入口从首页改为分类页（只有分类页会被挑战）。`onLoginSuccess` 回读 `cf_clearance` 并提示；新增手动粘贴 `cf_clearance` 的兜底，验证方式是带 Cookie 请求分类页。
+- 漫自由：旧 `checkStatus` 要求 `/m/user/(center|index)` 且标题含“漫自由”，但实测 `/m/user/center` 是 404，未登录的 `/m/user/index` 就是登录表单（与 `/m/user/login` 同长度），会在用户没登录时误判成功。现在要求标题不含 登录/注册/验证/404，并在 `onLoginSuccess` 里回读页面，仍有密码框就提示“没有确认到登录状态”。
+- Komiic：接口走 `Authorization: Bearer`，网页登录只能拿 Cookie，拿不到 token（schema 里也没有 `me` 字段）。新增手动粘贴 `token` 的兜底，用 `query{account{id}}` 校验（匿名会返回 `no token`）；账号密码登录成功后也立刻用该查询验证，失败就删掉已存 token。网页登录的提示改为“只用于过网站验证”。
+- MYCOMIC：`onLoginSuccess` 增加一次真实请求，命中 WAF 时直接建议改用手动 `cf_clearance`；删除被覆盖的旧 `account`（其 `validate` 引用了未定义的 `headers`）。
+- 漫蛙、拷贝、如漫画**不加登录入口**，理由有实测依据：漫蛙 `/book/<id>/1/` 未登录也返回正文（130113 字节）与图片；拷贝的 `/login`、`/comic/*`、`/user` 返回同一份 75601 字节 SPA 外壳、标题恒为“拷貝漫畫”，无法据 URL/标题判断登录状态；如漫画走公开 HTTP 接口，没有需要登录的路径。
+- 漫画屋、MYCOMIC、Komiic 各加一个 `type:'callback'` 检查项：漫画屋带 Cookie 请求分类页并识别挑战页特征、MYCOMIC 走一次 `fetchWithCFCheck`、Komiic 用 `query{account{id}}` 校验已保存 token。检查项只读取状态，不修改凭据。
+
+## 2.3.4
+
+这一轮只动漫自由：它从「只能跳浏览器下载」变成「在软件内直接下载 EPUB / MOBI」。
+
+- 依据来自站点前台脚本，不是猜的：详情页内联的 `fileDownload(id)` 就是
+  `$.ajax({type:'POST', url:'/m/vol/download_add', dataType:'json', data:{ids:[id], ext:g_ext}, success:({result})=>{ window.location.href = result[i]['url'] + '&filename=' + result[i]['file_name'] }})`，页面里 `let g_ext = 'epub';`，卷 ID 就是 `.vol-item input.form-check-input` 的 `value`。实测未登录请求返回 `HTTP 400 {"code":4001002,"message":"請先登錄"}`，触发每日额度是 `4001050`。
+- `getDownloadUrl` 现在按上面的格式手拼 `ids[]=<卷ID>&ext=epub|mobi` 请求 `/m/vol/download_add`，从 `result[0].url` + `&filename=` 返回真实文件地址；没有 `url` 时按错误码给出「请先登录」或接口原因。`ids[]` 是 PHP 数组参数，必须手拼字符串（与 `rumanhua.js` 的先行做法一致，宿主只负责转发 `data`）。
+- 归档条目对齐普通章节列表：`title` 用站点原名（`第01卷` / `第01话`），`description` 从「EPUB / MOBI；选择后打开网站，需在网页登录下载。」改为 `41頁 · EPUB 19M · MOBI 19M` 这种紧凑信息，数据取自 `.vol-item-info.ext-mobi` / `.ext-epub` / 无 ext class 的页数节点。页数文案自带「頁」，不再重复拼接。
+- `loadInfo` 的 `description` 删除「卷目录」整段，改为下载方式 + 总卷数；`loadEp` 的报错改成引导用户走「下载 → 归档」。
+- 新增设置项「下载格式」（EPUB / MOBI，默认 EPUB），通过 `loadSetting('format')` 决定 `ext`。
+
 ## 遗留与需实机确认
 
-- 包子的章节键仍是位置索引。迁移到站点章节 ID 需要先确认真实详情页结构，否则会让已有历史、下载和阅读位置指错章；这一步不应在离线阶段盲改。
-- 包子、漫画屋、拷贝、MYCOMIC、漫自由目前没有可靠 `updateTime`，追更对这些源无效。补假日期比留空更糟。
-- 章节顺序（新到旧 / 旧到新）只做了启发式反转，未逐站核对。
-- 如漫画仍使用 HTTP；站点 HTTPS 证书问题解决前不强行切换。
+- 包子的章节键仍是位置索引，**站点没有可迁移的稳定章节 ID**：实测目录链接是 `/user/page_direct?comic_id=<slug>&section_slot=0&chapter_slot=N`，`chapter_slot` 从 0 连续到 n-1，没有任何章节 id 属性，槽位号与现有位置索引一一对应。除非站点改版提供真实 ID，否则不应改键（改键会让历史、下载和阅读位置指错章）。
+- 章节顺序（新到旧 / 旧到新）目前只对包子逐站核对过：`#chapter-items` 是 0..23、`#chapters_other_list` 是 24..n-1，都是升序，现有的“两段拼接 + 为空才反转”的启发式与站点一致；其余源未逐一核对。
+- 包子的章节页主机随**出口网络**变化：挂代理走 `cn.twbzmg.com`，直连走 `cn.cnbzmg.com`（`/user/page_direct` 的 302 决定，`cn.bzmgcn.com` 上的同路径会先跳到镜像）。`cn.twbzmg.com` 实测常常直接放行，`cn.cnbzmg.com` 需要先过 gatekeeper；两者的 `__Host-` 凭据按主机绑定，网页登录（只覆盖 `cn.bzmgcn.com`）拿到的 Cookie 不能直接用于镜像。`loadEp` 因此按「登录同源 → twbzmg → cnbzmg → appcn」顺序尝试。
+- 漫画屋的分类页、进度页和「更多」是路径级 Cloudflare 挑战：源请求必须先由用户在应用内网页过一次验证（登录入口已直接指向分类页），源侧无法代过。首页与详情页不受影响。
+- MYCOMIC 被 WAF 直接拒绝时（403 `Sorry, you have been blocked`）内置网页同样进不去，只能手动粘贴浏览器的 `cf_clearance`；`registerWebsite` 为空，没有网页注册入口。
+- 漫蛙、漫画屋、MYCOMIC、漫自由目前没有可靠 `updateTime`，追更对这些源无效（拷贝本轮已补）。补假日期比留空更糟。
+- 如漫画仍使用 HTTP；`rumanhua2.com` 的证书不匹配该域名，强行切 HTTPS 会直接 `ERR_TLS_CERT_ALTNAME_INVALID`。
 - 漫蛙 `Network.get` 的 `connectTimeout`/`receiveTimeout` 选项当前不会被宿主读取（超时由应用统一设置），属于无效参数，未删是为了保留调用意图；后续确认后可移除。
+- 漫自由下载依赖网站登录态：`/m/vol/download_add` 未登录只返回 `4001002`，而 Cookie 与内置 WebView 共享，所以要么先在源设置里网页登录，要么等后续站点提供 token。文件是整卷 EPUB / MOBI，不是分话图片。
+- 登录相关仍需实机确认：包子的 `TSID` 兜底（站点是否每次重新下发同名 Cookie）、漫自由登录成功后 `/m/user/index` 是否真的换成用户中心（目前只能以“没有密码框”作为判据）、Komiic 网页登录能否让图片与额度走通（API 仍要 Bearer token，网页 Cookie 只影响网站侧验证）。
 
 ## 2.3.1
 

@@ -1,10 +1,10 @@
 // 漫画屋移动网页适配；仅读取目录和图片，不执行网页广告脚本。
 class Mhua5 extends ComicSource {
-    name='漫画屋'; key='mhua5'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js";
+    name='漫画屋'; key='mhua5'; version = "2.3.3"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js";
     base='https://mhua5.com';
     headers(){return{'User-Agent':'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',Referer:this.base+'/'};}
     absolute(path){if(/^https?:\/\//.test(path||''))return path;if(String(path).startsWith('//'))return'https:'+path;return this.base+'/'+String(path||'').replace(/^\//,'');}
-    async html(path,desktop=false){const headers=this.headers();if(desktop)headers['User-Agent']='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';const r=await Network.get(this.absolute(path),headers);if(r.status!==200||/Just a moment|正在验证|Sorry, you have been blocked/i.test(r.body||''))throw new Error('漫画屋请求失败或需要浏览器验证（HTTP '+r.status+'），请使用本源网页登录入口后重试。');return r.body;}
+    async html(path,desktop=false){const headers=this.headers();if(desktop)headers['User-Agent']='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';const r=await Network.get(this.absolute(path),headers);if(r.status!==200||/Just a moment|正在验证|Sorry, you have been blocked/i.test(r.body||''))throw new Error('漫画屋请求失败或需要浏览器验证（HTTP '+r.status+'）。分类页受 Cloudflare 托管挑战，请先在源设置的「登录」里打开分类页完成一次验证，再回到这里重试。');return r.body;}
     parseList(root){
         const seen={},comics=[];
         for(const a of root.querySelectorAll('a')){
@@ -71,7 +71,16 @@ class Mhua5 extends ComicSource {
                 if(!rows.length)throw new Error('漫画屋章节目录为空。');
                 const style=doc.querySelector('.box-back')?.attributes.style||'',cover=style.match(/url\(['"]?([^)'"\s]+)/)?.[1]||'';
                 const author=doc.querySelector('.au-name')?.text.replace(/^作者[：:]\s*/,'').trim()||'';
-                return new ComicDetails({title,cover:cover?this.absolute(cover):'',description:doc.querySelector('.comic-intro')?.text.trim()||'',tags:author?{作者:[author]}:{},chapters});
+                // 题材取详情页「题材:」后指向 /index.php/category/tags/<id> 的链接文本（同页可能有重复项）。
+                const tags={},themes=[],seenTheme={};
+                if(author)tags['作者']=[author];
+                for(const a of doc.querySelectorAll('a')){
+                    const name=a.text.trim();
+                    if(!/\/index\.php\/category\/tags\//.test(a.attributes.href||'')||!name||name.length>12||seenTheme[name])continue;
+                    seenTheme[name]=true;themes.push(name);
+                }
+                if(themes.length)tags['题材']=themes;
+                return new ComicDetails({title,cover:cover?this.absolute(cover):'',description:doc.querySelector('.comic-intro')?.text.trim()||'',tags,chapters});
             }finally{doc.dispose();}
         },
         loadEp:async(id,ep)=>{
@@ -88,15 +97,44 @@ class Mhua5 extends ComicSource {
             return{url,headers:this.headers()};
         }
     };
-    account={loginWithWebview:{url:'https://mhua5.com/',checkStatus:(url,title)=>/^https:\/\/(?:www\.)?mhua5\.com(?:\/|$)/.test(url||'')&&/漫画屋/.test(title||'')&&!/moment|blocked|验证/i.test(title||'')},logout:()=>Network.deleteCookies(this.base)};
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
+    // 首页与详情页不需要验证，分类页才被 Cloudflare 托管挑战拦（403 Just a moment）。
+    // 所以登录入口直接打开分类页，让用户在那里过一次验证；通过后 cf_clearance 会进应用共用的 CookieJar。
+    settings = {
+        checkVerification:{title:'检查分类页验证',type:'callback',buttonText:'检查是否已过验证',callback:async()=>{
+            try{
+                const r=await Network.get('https://mhua5.com/index.php/category/tags/6',this.headers());
+                if(/Just a moment|__cf_chl_|challenge-platform/i.test(r.body||''))throw new Error('仍是 Cloudflare 挑战页');
+                if(r.status!==200)throw new Error('HTTP '+r.status);
+                UI.showMessage('分类页已可直接读取，验证 Cookie 有效。分类、筛选和「更多」都能用。');
+            }catch(e){UI.showMessage('分类页仍不可用：'+e.message+'。请在「登录 → 网页登录」里打开分类页完成一次验证，或手动粘贴 cf_clearance。');}
+        }}
+    };
+    account={
+        loginWithWebview:{
+            url:'https://mhua5.com/index.php/category/tags/6',
+            // checkStatus 由宿主同步调用，必须是纯函数；未通过验证时标题会含 Just a moment。
+            checkStatus:(url,title)=>!!url&&/^https:\/\/(?:www\.)?mhua5\.com\/index\.php\/category\//.test(url)&&!!title&&!/moment|blocked|验证|驗證|challenge/i.test(title),
+            onLoginSuccess:()=>{
+                const cookies=Network.getCookies('https://mhua5.com')||[];
+                const cleared=cookies.some(c=>c.name==='cf_clearance'&&!!c.value);
+                UI.showMessage(cleared?'漫画屋验证已保存（cf_clearance）：分类页、筛选和「更多」现在都能打开。':'网页已打开，但没有读到 cf_clearance。若页面还在验证，等它自动跳转完成；也可以直接用「手动 Cookie」登录。');
+            }
+        },
+        // 网页登录失败时的兜底：用户在桌面浏览器过完验证后把 cf_clearance 粘进来。
+        loginWithCookies:{
+            fields:['cf_clearance（浏览器 F12 → Application → Cookies → mhua5.com 复制）'],
+            validate:async values=>{
+                const value=((values||[])[0]||'').trim();
+                if(!value)return false;
+                Network.setCookies('https://mhua5.com',[new Cookie({name:'cf_clearance',value,domain:'.mhua5.com'})]);
+                try{
+                    const r=await Network.get('https://mhua5.com/index.php/category/tags/6',this.headers());
+                    return r.status===200&&!/Just a moment|__cf_chl_|challenge-platform/i.test(r.body||'');
+                }catch(_){return false;}
+            }
+        },
+        logout:()=>Network.deleteCookies('https://mhua5.com')
+    };
 
 }
 

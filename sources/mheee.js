@@ -1,7 +1,7 @@
 // 漫自由：文件目录型源。本站提供 ePub/MOBI，非普通在线分话图片站。
-// VeneraNext 源 archive 下载当前面向 ZIP，本源不伪装 EPUB 为章节图片。
+// archive 走站点 /m/vol/download_add 换取真实文件地址（需登录），由宿主下载 EPUB/MOBI。
 class Mheee extends ComicSource {
-    name='漫自由'; key='mheee_catalog'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js"; base='https://mheee.com';
+    name='漫自由'; key='mheee_catalog'; version = "2.3.4"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js"; base='https://mheee.com';
     absolute(path){if(/^https?:\/\//.test(path||''))return path;if(String(path).startsWith('//'))return'https:'+path;return this.base+'/'+String(path||'').replace(/^\//,'');}
     async html(path){const r=await Network.get(this.base+path,{Referer:this.base+'/'});if(r.status!==200||/Just a moment|正在验证|Sorry, you have been blocked/.test(r.body||''))throw new Error('漫自由请求失败或需要浏览器验证：HTTP '+r.status);return r.body;}
     parseList(root){const seen={},comics=[];
@@ -44,10 +44,12 @@ class Mheee extends ComicSource {
                 if(this.loadData('lastComic')!==id)this.saveData('lastComic',id);
                 // 无封面时必须返回空串：absolute('') 会得到站点根地址，不是图片。
                 const coverSrc=img?.attributes['data-src']||img?.attributes.src||'';
-                return new ComicDetails({title,subtitle:'EPUB / MOBI 文件站 · 网页下载',cover:coverSrc?this.absolute(coverSrc):'',description:'本站提供 EPUB / MOBI 文件，不是在线分话图片源。\n点“下载”后展开“Archive / 压缩包”，选择卷条目可打开网站下载页；不会创建软件内图片下载任务。也可到源设置打开最近查看的作品。网页登录与额度以网站为准。\n\n卷目录：\n'+volumes.join('\n'),chapters:null});
+                return new ComicDetails({title,subtitle:'EPUB / MOBI 文件站',cover:coverSrc?this.absolute(coverSrc):'',description:'漫自由是 EPUB / MOBI 下载站，不是在线分话图片源，下载后请用兼容阅读器打开。\n登录网站账号后，点「下载」→ 展开「归档」→ 选卷，即可在软件内直接下载（本作共 '+volumes.length+' 卷）。',
+                    // 文件站详情页只有卷目录、没有题材/作者标签；显式给空对象，缺 tags 会被宿主判为 Invalid data。
+                    tags:{},chapters:null});
             }finally{doc.dispose();}
         },
-        loadEp:async()=>{throw new Error('漫自由提供 ePub / MOBI 文件，不支持普通分话图片阅读。请从源设置打开最近作品下载页。');},
+        loadEp:async()=>{throw new Error('漫自由只有 EPUB / MOBI 文件，不能分话阅读；请点「下载」→ 展开「归档」选卷下载。');},
         onThumbnailLoad:url=>({url,headers:{Referer:this.base+'/'}}),
         archive:{
             getArchives:async id=>{
@@ -56,30 +58,70 @@ class Mheee extends ComicSource {
                 try{
                     const items=[];
                     for(const node of doc.querySelectorAll('.vol-item')){
-                        const input=node.querySelector('input'),name=node.querySelector('.vol-item-no')?.text.trim();
-                        const vol=input?.attributes.value;
-                        if(name&&/^\d+$/.test(vol||''))items.push({id:vol,title:name+'（网页文件下载）',description:'EPUB / MOBI；选择后打开网站，需在网页登录下载。'});
+                        const input=node.querySelector('input'),name=(node.querySelector('.vol-item-no')?.text||'').trim(),vol=input?.attributes.value;
+                        if(!name||!/^\d+$/.test(vol||''))continue;
+                        // 站点给每卷两个体积（EPUB / MOBI）和页数，摊平成一行副标题，列表才像普通章节列表一样干净。
+                        let mobi='',epub='',pages='';
+                        for(const info of node.querySelectorAll('.vol-item-info')){
+                            const cls=String(info.attributes.class||''),text=(info.text||'').trim();
+                            if(!text)continue;
+                            if(cls.indexOf('ext-mobi')>=0)mobi=text;
+                            else if(cls.indexOf('ext-epub')>=0)epub=text;
+                            else pages=text.replace(/^[（(]|[)）]$/g,'');
+                        }
+                        const meta=[];
+                        // 站点文案本身带「頁」，别再拼一次，否则会出现「41頁頁」。
+                        if(pages)meta.push(/頁$/.test(pages)?pages:pages+'頁');
+                        if(epub||mobi)meta.push('EPUB '+(epub||'-')+' · MOBI '+(mobi||'-'));
+                        items.push({id:vol,title:name,description:meta.join(' · ')});
                     }
                     if(!items.length)throw new Error('未找到文件卷目录，请从源设置打开网站查看。');return items;
                 }finally{doc.dispose();}
             },
             getDownloadUrl:async(id,vol)=>{
                 if(!/^[a-zA-Z0-9_-]+$/.test(id)||!/^\d+$/.test(vol))throw new Error('无效作品或文件 ID。');
-                // 契约要求返回非空 URL；本源不启动软件内下载，也不先切走用户到浏览器再报错。
-                throw new Error('漫自由不提供压缩包下载 URL。请到源设置点“打开最近查看的作品”，在网站登录后下载 EPUB / MOBI。');
+                const ext=this.downloadFormat();
+                // 站点前端 fileDownload() 就是 POST 这个地址，返回 {result:[{url,file_name}]}；
+                // 它依赖登录 Cookie，未登录返回 4001002。
+                const body='ids[]='+encodeURIComponent(vol)+'&ext='+encodeURIComponent(ext);
+                const res=await Network.post(this.base+'/m/vol/download_add',{'Referer':this.base+'/comic/'+id,'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8','X-Requested-With':'XMLHttpRequest','Accept':'application/json, text/javascript, */*; q=0.01'},body);
+                let json;
+                try{json=JSON.parse(res.body||'{}');}catch(_){throw new Error('漫自由下载接口返回异常（HTTP '+res.status+'）。');}
+                const first=Array.isArray(json.result)?json.result[0]:null,url=first?String(first.url||''):'';
+                if(url)return url+(url.indexOf('?')>=0?'&':'?')+'filename='+encodeURIComponent(first.file_name||(id+'_'+vol+'.'+ext));
+                const code=json.code,message=json.message||'';
+                if(code===4001002)throw new Error('请先在源设置的「登录」里登录漫自由网站账号，登录后再选该卷下载。');
+                throw new Error('漫自由下载失败：'+(message||('返回码 '+(code||res.status)))+'。');
             }
         }
     };
-    settings={website:{title:'文件下载入口',type:'callback',buttonText:'打开最近查看的作品',callback:()=>{const id=this.loadData('lastComic');UI.launchUrl(this.base+(id?'/comic/'+id:'/'));}},notice:{title:'阅读方式',type:'callback',buttonText:'查看说明',callback:()=>UI.showMessage('漫自由是 ePub / MOBI 文件站，本源支持搜索和目录；请在网站下载后使用兼容阅读器打开。')}};
-    account={loginWithWebview:{url:'https://mheee.com/m/user/login',checkStatus:(url,title)=>/^https:\/\/mheee\.com\/(?:m\/user\/(?:center|index)|$)/.test(url||'')&&/漫自由/.test(title||'')},logout:()=>Network.deleteCookies(this.base)};
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
+    // 站点默认 epub，用户可在源设置里切成 mobi；只影响「归档」下载的文件格式。
+    downloadFormat(){const v=this.loadSetting('format');return v==='mobi'?'mobi':'epub';}
+    settings={format:{title:'下载格式',type:'select',options:[{value:'epub',text:'EPUB'},{value:'mobi',text:'MOBI'}],default:'epub'},website:{title:'文件下载入口',type:'callback',buttonText:'打开最近查看的作品',callback:()=>{const id=this.loadData('lastComic');UI.launchUrl(this.base+(id?'/comic/'+id:'/'));}},notice:{title:'阅读方式',type:'callback',buttonText:'查看说明',callback:()=>UI.showMessage('漫自由是 EPUB / MOBI 下载站。点「下载」→ 展开「归档」→ 选卷，登录网站账号后即可在软件内下载；下载完成后请用兼容阅读器打开。')}};
+    // 未登录时 /m/user/index 与 /m/user/login 返回的是同一张登录表单（标题里带「登录」），
+    // 所以不能只看 URL：必须要求标题不含 登录/注册/404，否则网页刚打开就会被误判为登录成功。
+    account={
+        loginWithWebview:{
+            url:'https://mheee.com/m/user/login',
+            checkStatus:(url,title)=>{
+                if(!/^https:\/\/mheee\.com\/m\/user\/(?:index|login)(?:\/|[?#]|$)/.test(url||''))return false;
+                if(!/漫自由/.test(title||''))return false;
+                return !/登录|登入|登陆|注册|註冊|验证|驗證|404/i.test(title||'');
+            },
+            // 宿主允许异步：回到个人中心再确认一次，避免把「只是打开了网页」当成已登录。
+            onLoginSuccess:async()=>{
+                try{
+                    const r=await Network.get(this.base+'/m/user/index',{Referer:this.base+'/'});
+                    if(r.status!==200)throw new Error('HTTP '+r.status);
+                    if(/<input[^>]+name=["']password["']/i.test(r.body||''))throw new Error('页面仍是登录表单');
+                    UI.showMessage('漫自由账号已登录：接下来在网站里下载 EPUB / MOBI 会带上这份 Cookie。');
+                }catch(e){
+                    UI.showMessage('网页已返回，但没有确认到登录状态（'+e.message+'）。下载前请先确认网站右上角已显示账号。');
+                }
+            }
+        },
+        logout:()=>Network.deleteCookies('https://mheee.com')
+    };
 
 }
 

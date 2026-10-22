@@ -23,6 +23,32 @@
 
 如果 Cookie 显示已保存而请求仍被拦截，需要继续区分网络出口和浏览器环境差异；错误消息本身不能证明 Cookie 未保存，也不能据此认定必须修改应用。
 
+## 现场实测：章节页主机与前置校验（2026-10-22）
+
+用普通浏览器 UA 直连实测（未登录、无 Cookie），记录如下，供后续维护判断：
+
+- 前置校验不是 Cloudflare：`https://cn.bzmgcn.com/` 返回 403，正文为
+  `{"challenge_url":"/__gatekeeper_challenge/start?return=%2F","error":"challenge_required"}`。
+  挑战页是纯工作量证明（无验证码、不依赖浏览器指纹），难度 16 bit，通过后下发
+  `__Host-gk_clearance_<主机哈希>`，有效期约 3 分钟。
+- 该类 Cookie 带 `__Host-` 前缀，**按主机绑定**：`cn.bzmgcn.com` 上的通过状态不能用于章节主机。
+- 章节入口：详情页每个章节是 `/user/page_direct?comic_id=<slug>&section_slot=0&chapter_slot=N`，
+  302 到 `https://cn.cnbzmg.com/comic/chapter/<slug>/0_<N>.html` 或 `https://cn.twbzmg.com/...`。
+  **两个镜像按出口网络二选一：挂代理走 `cn.twbzmg.com`，直连走 `cn.cnbzmg.com`。**
+  在 `cn.bzmgcn.com` 上请求同一路径同样会 302 到 `cn.cnbzmg.com` 并收到 403 挑战。
+- 两个镜像的前置校验不同：同一条直连网络下 `cn.twbzmg.com` 的首页与章节页都是 200（无挑战），
+  `cn.cnbzmg.com` 则需要先过 gatekeeper。因此 2.3.3 的 `loadEp` 先试 twbzmg 再试 cnbzmg。
+- 章节页结构：`ul.comic-contain > amp-img.comic-contain__item[data-src]`，
+  **没有** `.chapter-img` 包裹层；`data-src` 指向 `https://s1.bzcdn.net/scomic/...`。
+- 图片本身不校验 `Referer`；质量前缀 `/w640/` 返回 WebP 缩略图，原图不加上下文也可直接取。
+- `appcn.baozimh.com`（旧的移动版章节地址）当前返回 Cloudflare「Just a moment」页，且属于另一个主机，
+  网页登录拿不到它的 Cookie，因此原 `loadEp` 的固定地址在真机上无法取图。
+
+据此 2.3.3 把 `loadEp` 改成多候选并兼容现行 DOM。落到 `cn.twbzmg.com` 时通常不需要额外凭据；
+只有落到 `cn.cnbzmg.com` 时才要求该主机自身通过校验。后续若要覆盖后一种情况，可选：让现有 WebView 登录流程
+顺带访问一次任意章节页（使目标主机也拿到凭据），或在源脚本内自行完成校验；
+两者都需要实机确认体验与时限，暂未实施。
+
 ## 已完成的检查与限制
 
 ```sh

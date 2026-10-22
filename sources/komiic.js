@@ -1,7 +1,7 @@
 // Komiic.cc；以站点当前公开 GraphQL 接口和图片票据协议适配。
 // 分类 ID 参考 venera-app/venera-configs/komiic.js；本地定制版。
 class KomiicCC extends ComicSource {
-    name='Komiic漫画'; key='komiic_cc'; version = "2.3.2"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
+    name='Komiic漫画'; key='komiic_cc'; version = "2.3.3"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
     base='https://komiic.cc'; tickets={}; ticketRequests={}; ticketEpoch=0;
     resetTickets(){this.ticketEpoch++;this.tickets={};this.ticketRequests={};}
     fields='id title imageUrl authors {id name} categories {id name} dateUpdated';
@@ -108,24 +108,44 @@ class KomiicCC extends ComicSource {
         },
         onThumbnailLoad:url=>({url,headers:{'Referer':'https://komiic.cc/'}})
     };
+    // 网页登录只能替浏览器过验证、拿 Cookie；GraphQL 用的是 Bearer token，两者不是一回事。
+    settings = {
+        checkToken:{title:'检查 API 登录状态',type:'callback',buttonText:'检查登录令牌',callback:async()=>{
+            if(!this.loadData('token'))throw new Error('还没有保存 token：请用「账号密码」登录，或在「登录」里粘贴 token。');
+            const data=await this.query('query{account{id}}');
+            if(!data.account)throw new Error('令牌没有通过接口校验。');
+            UI.showMessage('API 登录有效（用户 ID '+data.account.id+'）。');
+        }}
+    };
     account={
         login:async(email,password)=>{
-            const r=await Network.post(this.base+'/api/login',{'Content-Type':'application/json',Referer:this.base+'/'},JSON.stringify({email,password}));
-            if(r.status!==200)throw new Error('Komiic 登录失败，请检查账号、密码及网站验证状态。');
+            const account=String(email||'').trim(),pwd=String(password||'');
+            if(!account||!pwd)throw new Error('Komiic 登录需要邮箱和密码。');
+            const r=await Network.post(this.base+'/api/login',{'Content-Type':'application/json',Referer:this.base+'/'},JSON.stringify({email:account,password:pwd}));
+            if(r.status!==200)throw new Error('Komiic 登录失败（HTTP '+r.status+'），请检查账号、密码及网站验证状态。');
             let data;try{data=JSON.parse(r.body);}catch(_){throw new Error('登录返回非 JSON，请先在网站完成验证。');}
-            if(!data.token)throw new Error('Komiic 没有返回登录令牌。');this.resetTickets();this.saveData('token',data.token);return 'ok';
+            if(!data.token)throw new Error('Komiic 没有返回登录令牌。');
+            this.saveData('token',data.token);this.resetTickets();
+            // 令牌存下来后立刻验一次：接口对未登录/失效令牌会返回 no token。
+            try{await this.query('query{account{id}}');}catch(e){this.deleteData('token');throw new Error('Komiic 登录令牌无效：'+e.message);}
+            return 'ok';
         },
-        loginWithWebview:{url:'https://komiic.cc/',checkStatus:(url,title)=>/^https:\/\/komiic\.cc(?:\/|$)/.test(url||'')&&/Komiic/i.test(title||'')&&!/验证|moment|blocked/i.test(title||''),onLoginSuccess:()=>this.resetTickets()},
+        // 网页登录只能替浏览器过验证、拿 Cookie；GraphQL 用的是 Bearer token，两者不是一回事。
+        loginWithWebview:{url:'https://komiic.cc/',checkStatus:(url,title)=>/^https:\/\/komiic\.cc(?:\/|$)/.test(url||'')&&/Komiic/i.test(title||'')&&!/验证|驗證|moment|blocked|challenge/i.test(title||''),onLoginSuccess:()=>{
+            this.resetTickets();
+            const cookies=Network.getCookies('https://komiic.cc')||[];
+            UI.showMessage(cookies.length?'Komiic 网页会话已保存（用于过网站验证）。图片与阅读额度仍走 API，请用「账号密码」登录。':'网页已保存，但没有读到 Cookie。若接口提示需要验证，请重开网页登录完成一次验证。');
+        }},
+        // 兜底：网页登录拿不到 Bearer token 时，可以粘贴网站里的 token。
+        loginWithCookies:{fields:['token（网站 F12 → Application → Local Storage → token）'],validate:async values=>{
+            const token=((values||[])[0]||'').trim();
+            if(!token)return false;
+            this.saveData('token',token);
+            try{const data=await this.query('query{account{id}}');if(!data.account)throw new Error('空账号');this.resetTickets();return true;}
+            catch(_){this.deleteData('token');return false;}
+        }},
         logout:()=>{this.resetTickets();this.deleteData('token');Network.deleteCookies(this.base);}
     };
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
 
 }
 

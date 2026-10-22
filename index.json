@@ -2,7 +2,7 @@
   {
     "name": "漫蛙漫画",
     "key": "manwa_routes",
-    "version": "2.3.2",
+    "version": "2.3.3",
     "fileName": "sources/manwa.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js",
     "description": "漫蛙单站选线；分类页新增地区、面向和进度入口，筛选支持新漫排序。线路可达性视网络而定。"
@@ -10,7 +10,7 @@
   {
     "name": "如漫画",
     "key": "rumanhua_com",
-    "version": "2.1.1",
+    "version": "2.1.2",
     "fileName": "sources/rumanhua.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/rumanhua.js",
     "description": "如漫画：分区发现、分类、搜索和章节解码；当前使用 HTTP，网站 HTTPS 证书兼容问题尚存。"
@@ -18,7 +18,7 @@
   {
     "name": "Komiic漫画",
     "key": "komiic_cc",
-    "version": "2.3.2",
+    "version": "2.3.3",
     "fileName": "sources/komiic.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js",
     "description": "Komiic 分类按网站公开 allCategory 接口分为七组；搜索、阅读及图片票据仍受网站额度限制。"
@@ -26,7 +26,7 @@
   {
     "name": "漫画屋",
     "key": "mhua5",
-    "version": "2.3.1",
+    "version": "2.3.3",
     "fileName": "sources/mhua5.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js",
     "description": "漫画屋：分区发现、22 个题材及进度分类；分类列表可能要求浏览器验证。"
@@ -34,7 +34,7 @@
   {
     "name": "拷贝漫画",
     "key": "copy_web_routes",
-    "version": "2.3.1",
+    "version": "2.3.2",
     "fileName": "sources/copy_manga.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js",
     "description": "拷贝漫画：copy4000 / mangacopy 选线；题材和地区分类，线路可达性视网络而定。"

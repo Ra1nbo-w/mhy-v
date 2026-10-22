@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.3.2";
+  version = "2.3.3";
 
   minAppVersion = "1.18.0";
 
@@ -75,51 +75,6 @@ class Baozi extends ComicSource {
     let domain = this.loadSetting("domains") || this.settings.domains.default;
     return `https://${this.lang}.${domain}`;
   }
-
-  /// 账号
-  /// 设置为null禁用账号功能
-  account = {
-    /// 登录
-    /// 返回任意值表示登录成功
-    login: async (account, pwd) => {
-      let res = await Network.post(
-        `${this.baseUrl}/api/bui/signin`,
-        {
-          "content-type":
-            "multipart/form-data; boundary=----WebKitFormBoundaryFUNUxpOwyUaDop8s",
-        },
-        '------WebKitFormBoundaryFUNUxpOwyUaDop8s\r\nContent-Disposition: form-data; name="username"\r\n\r\n' +
-        account +
-        '\r\n------WebKitFormBoundaryFUNUxpOwyUaDop8s\r\nContent-Disposition: form-data; name="password"\r\n\r\n' +
-        pwd +
-        "\r\n------WebKitFormBoundaryFUNUxpOwyUaDop8s--\r\n"
-      );
-      if (res.status !== 200) {
-        throw new Error("Invalid status code: " + res.status);
-      }
-      let json = JSON.parse(res.body);
-      let token = json.data;
-      Network.setCookies(this.baseUrl, [
-        new Cookie({
-          name: "TSID",
-          value: token,
-          domain: this.loadSetting("domains") || this.settings.domains.default,
-        }),
-      ]);
-      return "ok";
-    },
-
-    // 退出登录时将会调用此函数
-    logout: function () {
-      Network.deleteCookies(
-        this.loadSetting("domains") || this.settings.domains.default
-      );
-    },
-
-    get registerWebsite() {
-      return `${this.baseUrl}/user/signup`;
-    },
-  };
 
   /// 解析漫画列表
   parseComic(e) {
@@ -411,11 +366,15 @@ class Baozi extends ComicSource {
           .querySelectorAll("div.tag-list > span")
           .map((e) => e.text.trim());
         tags = [...tags.filter((e) => e !== "")];
+        // 页面实际文本形如 " (2026年06月28日 更新)"：只去掉括号不够，
+        // 末尾的“更新”会让下面的日期校验必然失败，导致追更日期一直为空。
         let updateTime = document
           .querySelector("div.supporting-text > div > span > em")
           ?.text.trim()
-          .replace("(", "")
-          .replace(")", "");
+          .replace(/[（(]\s*/g, "")
+          .replace(/\s*[)）]/g, "")
+          .replace(/\s*更新\s*$/, "")
+          .trim();
         // 追更日期只接受 年-月-日 形态。此前用“最后一章标题”兜底，会把
         // “第100话”这类文本当成日期，导致追更比较的是乱码；宁可不填。
         const datePattern = /^\d{4}\s*[-年]\s*\d{1,2}\s*[-月]\s*\d{1,2}\s*日?$/;
@@ -485,36 +444,56 @@ class Baozi extends ComicSource {
       } finally { document.dispose(); }
     },
     loadEp: async (comicId, epId) => {
-      const images = [];
-
-      // App版链接
-      let currentPageUrl = `https://appcn.baozimh.com/baozimhapp/comic/chapter/${comicId}/0_${epId}.html`;
-
-      const res = await this.getChecked(currentPageUrl);
-      if (res.status !== 200) {
-        throw new Error(`Invalid status code: ${res.status}`);
-      }
-
-      const doc = new HtmlDocument(res.body);
-      try {
-
-        // 解析当前页图片(App 版)
-        const imageNodes = doc.querySelectorAll(".comic-contain > .chapter-img");
-        imageNodes.forEach((imgNode) => {
-          let imgUrl = imgNode.querySelector(".comic-contain__item")?.attributes?.["data-src"];
-          if (imgUrl) {
-            if (imgUrl.startsWith('//')) imgUrl = 'https:' + imgUrl;
-            const match = imgUrl.match(/^(https?:\/\/)?([^/\s:]+)(:\d+)?(\/[a-z]comic\/.*)/);
-            if (match) {
-              const domain = this.loadSetting("cdn_domains") === "" ? match[2] : this.loadSetting("cdn_domains");
-              imgUrl = `${match[1] || 'https://'}${domain}${this.loadSetting("image_quality")}${match[4]}`;
-            }
-            images.push(imgUrl);
+      // 站点目录里的章节链接是 /user/page_direct?...，它会 302 到
+      // https://<章节主机>/comic/chapter/<slug>/<section>_<chapter>.html，
+      // 页面里是 <ul class="comic-contain"> 直接包 <amp-img class="comic-contain__item" data-src="...">。
+      // 章节主机随出口网络浮动：挂代理走 cn.twbzmg.com，直连走 cn.cnbzmg.com；
+      // 实测 cn.twbzmg.com 常常直接放行，cn.cnbzmg.com 则要过 gatekeeper。
+      // App 版 appcn 主机受 Cloudflare 挑战，且 __Host- 验证 Cookie 不能跨主机复用，
+      // 所以优先走与网页登录同源的章节页，再依次退到两个镜像，最后才回退 App 版。
+      const chapterPaths = (host) => `${host}/comic/chapter/${comicId}/0_${epId}.html`;
+      const candidates = [
+        chapterPaths(this.baseUrl),
+        chapterPaths("https://cn.twbzmg.com"),
+        chapterPaths("https://cn.cnbzmg.com"),
+        `https://appcn.baozimh.com/baozimhapp/comic/chapter/${comicId}/0_${epId}.html`,
+      ];
+      const failures = [];
+      for (const currentPageUrl of candidates) {
+        let res;
+        try {
+          res = await this.getChecked(currentPageUrl);
+        } catch (e) {
+          failures.push(e.message);
+          continue;
+        }
+        const doc = new HtmlDocument(res.body);
+        try {
+          const pick = (node) => node?.attributes?.["data-src"] || node?.attributes?.["src"];
+          let raw = doc.querySelectorAll(".comic-contain__item").map(pick);
+          if (!raw.some(Boolean)) {
+            // 旧版 App 章节页把图片包在 .chapter-img 里，保留兼容。
+            raw = doc.querySelectorAll(".comic-contain .chapter-img").map((wrap) =>
+              pick(wrap.querySelector(".comic-contain__item") || wrap.querySelector("amp-img") || wrap.querySelector("img"))
+            );
           }
-        });
-        if (!images.length) throw new Error('包子章节未取得图片，请检查验证状态或网站章节是否可读。');
-        return { images: images };
-      } finally { doc.dispose(); }
+          const images = raw
+            .filter(Boolean)
+            .map((value) => {
+              let imgUrl = String(value).trim();
+              if (imgUrl.startsWith("//")) imgUrl = "https:" + imgUrl;
+              const match = imgUrl.match(/^(https?:\/\/)?([^/\s:]+)(:\d+)?(\/[a-z]comic\/.*)/);
+              if (match) {
+                const domain = this.loadSetting("cdn_domains") === "" ? match[2] : this.loadSetting("cdn_domains");
+                imgUrl = `${match[1] || "https://"}${domain}${this.loadSetting("image_quality")}${match[4]}`;
+              }
+              return imgUrl;
+            });
+          if (images.length) return { images: images };
+          failures.push(currentPageUrl + " 未解析到图片");
+        } finally { doc.dispose(); }
+      }
+      throw new Error("包子章节未取得图片，请先完成网页验证；" + failures.join("；"));
     },
   };
 
@@ -528,7 +507,9 @@ class Baozi extends ComicSource {
     return ['cn.bzmgcn.com', 'www.baozimh.com'].includes(host) ? host : 'cn.bzmgcn.com';
   }
   websiteOrigin(url) {
-    const match = /^https:\/\/(?:cn\.bzmgcn\.com|www\.baozimh\.com)(?=\/|[?#]|$)/.exec(url || '');
+    // cn.cnbzmg.com / cn.twbzmg.com 是 /user/page_direct 跳转后的章节主机（随出口网络二选一），
+    // 与主站共用同一套验证，但不允许把 __Host- Cookie 搬到别的域，所以只在这里承认它们，不改 loginHost。
+    const match = /^https:\/\/(?:cn\.bzmgcn\.com|cn\.cnbzmg\.com|cn\.twbzmg\.com|www\.baozimh\.com)(?=\/|[?#]|$)/.exec(url || '');
     return match ? match[0] : null;
   }
   get baseUrl() {
@@ -560,7 +541,8 @@ class Baozi extends ComicSource {
     const requestHeaders={...headers};
     const origin = this.websiteOrigin(url);
     if(origin){
-      if (this.browserUA && origin === this.baseUrl) requestHeaders['User-Agent']=this.browserUA;
+      // 章节主机与主站共用同一份 WebView 会话，UA 必须保持一致；其余站点仍不做跨主机借用。
+      if (this.browserUA && (/^https:\/\/(?:cn\.bzmgcn\.com|cn\.(?:cn|tw)bzmg\.com)$/.test(origin) || origin === this.baseUrl)) requestHeaders['User-Agent']=this.browserUA;
       requestHeaders['Referer']=origin+'/';
       // 不重复读取验证前缓存的页面；不手工复制跨域 Cookie。
       requestHeaders['cache-time']='no';
@@ -580,7 +562,6 @@ class Baozi extends ComicSource {
       if(region||/热血|熱血/.test(title))p.viewMore={page:'category',attributes:{category:title,param:region?'region:'+region:'rexie'}};return p;
     });
   }}];
-  upstreamAccount = this.account;
   async checkWebsiteAccount() {
     const r = await this.getChecked(this.baseUrl + '/user/my_bookshelf');
     // Ignore script/template strings: only rendered account controls count.
@@ -595,27 +576,48 @@ class Baozi extends ComicSource {
   account = (()=> {
     const source=this;
     return {
-    logout: ()=>Network.deleteCookies(this.baseUrl),
+    logout: ()=>Network.deleteCookies(source.baseUrl),
     loginWithWebview: {
       // Account login must reach the bookshelf, not a public classification page.
       get url(){return source.baseUrl+'/user/my_bookshelf';},
+      // checkStatus 由宿主同步调用，而且 `this` 指向本对象而不是源实例，
+      // 所以这里只能引用闭包里的 source（旧写法会抛 TypeError，登录永远不成功）。
       checkStatus:(url,title)=> {
-        const origin = this.websiteOrigin(url);
+        const origin = source.websiteOrigin(url);
         if (!origin || !/^\/user\/my_bookshelf\/?(?:[?#].*)?$/.test(url.slice(origin.length))) return false;
         if (/验证|驗證|moment|blocked|Cloudflare|gatekeeper|checking|登录|登入|login|sign\s*in/i.test(title || '')) return false;
         if (!/书架|書架/.test(title || '')) return false;
         // The host captures cookies from this exact landing URL. Keep later
         // requests on its origin; never transplant __Host- cookies to another.
-        const session = this.loadData('_baoziWebLogin');
-        if (!session || session.origin !== origin || session.entryHost !== this.loginHost) {
-          this.saveData('_baoziWebLogin', {origin, entryHost:this.loginHost});
+        const session = source.loadData('_baoziWebLogin');
+        if (!session || session.origin !== origin || session.entryHost !== source.loginHost) {
+          source.saveData('_baoziWebLogin', {origin, entryHost:source.loginHost});
         }
         return true;
       },
       // Cookie capture has already completed here. An unrelated blocked HTTP
       // request must not prevent the host from returning to the app.
-      onLoginSuccess:()=>UI.showMessage('内置网页会话已保存（'+this.baseUrl+'）。可点“检查会话保存”确认 Cookie，再检查登录同步。')
-    }
+      onLoginSuccess:()=>{
+        const cookies = Network.getCookies(source.baseUrl+'/user/my_bookshelf') || [];
+        const hasAccount = cookies.some(c=>c.name==='TSID' && !!c.value);
+        UI.showMessage((hasAccount
+          ? '已保存账号 Cookie（TSID）。'
+          : '网页已返回，但没有读到 TSID；如果只是通过了验证，请在内置网页里登录账号后再进入书架。')
+          + '可点“检查会话保存”复核。');
+      }
+    },
+    // 网页登录拿不到账号 Cookie 时的兜底：粘贴浏览器里的 TSID，写入后立刻用「我的书架」验证。
+    loginWithCookies:{
+      fields:['TSID（网页登录后 F12 → Application → Cookies → TSID）'],
+      validate:async values=>{
+        const value=((values||[])[0]||'').trim();
+        if(!value)return false;
+        const host=source.loginHost;
+        Network.setCookies('https://'+host,[new Cookie({name:'TSID',value,domain:host})]);
+        try{await source.checkWebsiteAccount();return true;}catch(_){return false;}
+      }
+    },
+    get registerWebsite(){return source.baseUrl+'/user/signup';}
     };
   })();
   sourceSettings = Object.fromEntries(Object.entries(this.settings).filter(([key])=>key !== 'domains'));
@@ -648,15 +650,6 @@ class Baozi extends ComicSource {
       return result;
     }
   };
-
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
 
 }
 

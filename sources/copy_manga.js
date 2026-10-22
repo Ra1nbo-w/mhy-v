@@ -1,6 +1,6 @@
 // 拷贝漫画公开网页接口适配；两条线路共享作品/章节 ID。
 class CopyWeb extends ComicSource {
-    name='拷贝漫画'; key='copy_web_routes'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js";
+    name='拷贝漫画'; key='copy_web_routes'; version = "2.3.2"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js";
     get base(){return this.loadSetting('line')==='mangacopy'?'https://www.mangacopy.com':'https://www.copy4000.com';}
     settings={line:{title:'线路选择',type:'select',options:[{value:'copy4000',text:'copy4000.com'},{value:'mangacopy',text:'mangacopy.com（需自行确认网络可达）'}],default:'copy4000'},website:{title:'当前网站',type:'callback',buttonText:'打开网站',callback:()=>UI.launchUrl(this.base)}};
     // 不把应用版本写死：升级 VeneraNext 后 UA 会立即失真。
@@ -94,7 +94,18 @@ class CopyWeb extends ComicSource {
                     for(const row of group.chapters)chapters['ep_'+row.id]=(group.name==='默認'||group.name==='默认'?'':group.name+' / ')+row.name;
                 }
                 if(!Object.keys(chapters).length)throw new Error('拷贝没有返回章节。');
-                return new ComicDetails({title,cover:img?.attributes['data-src']||img?.attributes.src||'',description:doc.querySelector('.intro')?.text.trim()||'',chapters});
+                // 详情页：题材来自 theme=<slug> 链接，状态与更新日期在「狀態 / 最後更新」行。
+                const tags={},themes=[],seenTheme={};
+                for(const a of doc.querySelectorAll('a')){
+                    const name=a.text.trim().replace(/^#+\s*/,'');
+                    if(!/[?&]theme=/.test(a.attributes.href||'')||!name||name.length>12||seenTheme[name])continue;
+                    seenTheme[name]=true;themes.push(name);
+                }
+                if(themes.length)tags['题材']=themes;
+                const status=html.match(/狀態[\s\S]{0,160}?comicParticulars-right-txt[^>]*>([^<]{1,8})/);
+                if(status&&status[1].trim())tags['状态']=[status[1].trim()];
+                const updated=html.match(/最後更新[\s\S]{0,160}?comicParticulars-right-txt[^>]*>(\d{4}-\d{1,2}-\d{1,2})/);
+                return new ComicDetails({title,cover:img?.attributes['data-src']||img?.attributes.src||'',description:doc.querySelector('.intro')?.text.trim()||'',tags,updateTime:updated?updated[1]:undefined,chapters});
             }finally{doc.dispose();}
         },
         loadEp:async(id,ep)=>{
@@ -107,14 +118,6 @@ class CopyWeb extends ComicSource {
         },
         onImageLoad:url=>({url,headers:this.headers(this.base)}),onThumbnailLoad:url=>({url,headers:this.headers(this.base)})
     };
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
 
 }
 

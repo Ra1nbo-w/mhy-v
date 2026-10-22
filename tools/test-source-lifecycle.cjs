@@ -24,7 +24,12 @@ function source(name){
   for(const fail of [false,true])for(const action of actions){
    state.fail=fail;const count=state.created;
    await action().catch(()=>{});
-   assert.equal(state.created,count+1,name+' parser must run');assert.equal(state.open,0,name+' leaked document');
+   const created=state.created-count;
+   // 包子章节页会依次尝试多个候选主机，最多开 4 个文档；其余解析器只允许 1 个。
+   const maxDocs=(name==='baozi'&&action===actions[actions.length-1])?4:1;
+   assert(created>=1,name+' parser must run');
+   assert(created<=maxDocs,name+' opened too many documents');
+   assert.equal(state.open,0,name+' leaked document');
   }
  }
  {

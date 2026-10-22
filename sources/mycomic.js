@@ -175,7 +175,7 @@ class MyComic extends ComicSource {
 
     key = "mycomic";
 
-    version = "2.3.2";
+    version = "2.3.3";
 
     minAppVersion = "1.16.0";
 
@@ -197,68 +197,6 @@ class MyComic extends ComicSource {
             console.log("[MyComic] No cf_clearance cookie found. User may need to login.");
         }
     }
-
-    // ==================== Account (Cloudflare bypass) ====================
-
-    account = {
-        // Method 1: WebView login - opens mycomic.com in a real browser engine
-        // The browser will automatically solve Cloudflare's JS challenge,
-        // and the resulting cf_clearance cookie will be stored for Network requests.
-        loginWithWebview: {
-            url: "https://mycomic.com/cn",
-            checkStatus: (url, title) => {
-                // Cloudflare challenge page has title "Just a moment..." or similar
-                // After the challenge is passed, the real site loads
-                if (!url || !title) return false;
-                if (title.indexOf("moment") !== -1) return false;
-                if (title.indexOf("Cloudflare") !== -1) return false;
-                if (title.indexOf("challenge") !== -1) return false;
-                // Success: we're on the actual mycomic.com page
-                if (url.indexOf("mycomic.com") !== -1) return true;
-                return false;
-            },
-            onLoginSuccess: () => {
-                // Cookies from WebView should be synced with Network API automatically.
-                // Log for debugging.
-                const cookies = Network.getCookies("https://mycomic.com");
-                console.log("[MyComic] Login success. Cookies: " + (cookies ? cookies.length : 0));
-            },
-        },
-
-        // Method 2: Manual cookie input - user can paste cf_clearance value
-        // obtained from their browser's dev tools
-        loginWithCookies: {
-            fields: ["cf_clearance"],
-            validate: async (values) => {
-                if (!values || !values[0]) return false;
-                // Set the cf_clearance cookie
-                Network.setCookies("https://mycomic.com", [
-                    new Cookie({
-                        name: "cf_clearance",
-                        value: values[0],
-                        domain: ".mycomic.com",
-                    }),
-                ]);
-                // Validate by trying to fetch the homepage
-                try {
-                    const resp = await Network.get(
-                        "https://mycomic.com/cn",
-                        headers
-                    );
-                    return resp.status === 200 &&
-                        !isCloudflareChallenge(resp.status, resp.body);
-                } catch (e) {
-                    return false;
-                }
-            },
-        },
-
-        logout: () => {
-            Network.deleteCookies("https://mycomic.com");
-        },
-
-        registerWebsite: null,
-    };
 
     // ==================== Explore ====================
 
@@ -476,10 +414,9 @@ class MyComic extends ComicSource {
             const kw = (keyword || "").trim();
             if (!kw) return { comics: [], maxPage: 1 };
 
-            let sort = null;
-            if (options && options.length > 0 && options[0]) {
-                sort = options[0];
-            }
+            // 读者端把 "key-text" 按第一个 "-" 切成 key/text，因此选项 key 就是
+            // id/update/views，站点需要的降序前缀在这里补上。
+            const sort = options && options[0] ? "-" + options[0] : null;
 
             const url = buildComicsUrl(page, sort, kw);
             const resp = await fetchWithCFCheck(url);
@@ -498,9 +435,9 @@ class MyComic extends ComicSource {
             {
                 type: "select",
                 options: [
-                    "-id-最新上架",
-                    "-update-最近更新",
-                    "-views-最高人气",
+                    "id-最新上架",
+                    "update-最近更新",
+                    "views-最高人气",
                 ],
                 label: "排序",
                 default: null,
@@ -638,7 +575,11 @@ class MyComic extends ComicSource {
         return result;
     }}];
     settings = {
-        website:{title:'网站 / 验证失败时检查拦截原因',type:'callback',buttonText:'打开 MYCOMIC',callback:()=>UI.launchUrl('https://mycomic.com/cn')}
+        website:{title:'网站 / 验证失败时检查拦截原因',type:'callback',buttonText:'打开 MYCOMIC',callback:()=>UI.launchUrl('https://mycomic.com/cn')},
+        check:{title:'检查站点是否放行（WAF / 验证）',type:'callback',buttonText:'检查验证状态',callback:async()=>{
+            try{await fetchWithCFCheck(BASE_URL+'/comics/1');UI.showMessage('站点已放行：列表、搜索和章节请求都可以发出。');}
+            catch(e){UI.showMessage('站点仍拦截请求：'+e.message+'。请在「登录」里用网页登录过一次验证，或粘贴浏览器里的 cf_clearance。');}
+        }}
     };
     originalCategory = this.category;
     category = {...this.originalCategory,parts:this.originalCategory.parts.map((p,i)=>({...p,name:['题材','地区','受众','年份','进度'][i]}))};
@@ -659,7 +600,20 @@ class MyComic extends ComicSource {
     // 只有真实站点标题才结束 WebView；Access denied/Blocked 不能当作成功。
     account = {
         loginWithWebview:{url:'https://mycomic.com/cn',checkStatus:(url,title)=>
-            /^https:\/\/mycomic\.com(?:\/|$)/.test(url||'') && /MYCOMIC/i.test(title||'') && !/moment|challenge|blocked|denied|cloudflare|验证|驗證/i.test(title||'')},
+            /^https:\/\/mycomic\.com(?:\/|$)/.test(url||'') && /MYCOMIC/i.test(title||'') && !/moment|challenge|blocked|denied|cloudflare|验证|驗證/i.test(title||''),
+            // 网页是否真的能用，取决于 cf_clearance 有没有被站点接受，所以回填后再打一次站内请求。
+            onLoginSuccess:async()=>{
+                try{await fetchWithCFCheck(BASE_URL+'/comics/1');UI.showMessage('MYCOMIC 网页验证已保存，可以正常浏览。');}
+                catch(e){UI.showMessage('网页已返回，但站点仍拦截请求：'+e.message+'。可改用手动 cf_clearance 登录。');}
+            }},
+        // 站点被 WAF 直接拒绝时 WebView 也进不去，保留手动粘贴 cf_clearance 的入口；
+        // 原实现的 validate 引用了未定义的 headers，异常被吞掉后永远返回 false。
+        loginWithCookies:{fields:['cf_clearance（浏览器 F12 → Application → Cookies → mycomic.com 复制）'],validate:async values=>{
+            const value=((values||[])[0]||'').trim();
+            if(!value)return false;
+            Network.setCookies('https://mycomic.com',[new Cookie({name:'cf_clearance',value,domain:'.mycomic.com'})]);
+            try{await fetchWithCFCheck(BASE_URL+'/comics/1');return true;}catch(_){return false;}
+        }},
         logout:()=>Network.deleteCookies('https://mycomic.com')
     };
     originalComic = this.comic;
@@ -732,15 +686,6 @@ class MyComic extends ComicSource {
             return result;
         }
     };
-
-
-    _checkedComic = this.comic;
-    comic = {...this._checkedComic, loadInfo:async id=>{
-        const info=await this._checkedComic.loadInfo(id);
-        if(!info.tags)info.tags={};
-        if(info.tags instanceof Map)info.tags=Object.fromEntries(info.tags);
-        return info;
-    }};
 
 }
 

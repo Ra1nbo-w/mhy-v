@@ -2,7 +2,7 @@
   {
     "name": "MYCOMIC",
     "key": "mycomic",
-    "version": "2.3.2",
+    "version": "2.3.3",
     "fileName": "sources/mycomic.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js",
     "description": "MYCOMIC 发现页显示首页精选、推荐给你、最近更新、最新上架；网站拦截下尚未完成实机链路验证。"
@@ -10,7 +10,7 @@
   {
     "name": "包子漫画",
     "key": "baozi",
-    "version": "2.3.2",
+    "version": "2.3.3",
     "fileName": "sources/baozi.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js",
     "description": "包子网页验证兼容和本地 Cookie 状态检查；分类页移除常用，Android/Windows 实机登录待验证。"
@@ -18,7 +18,7 @@
   {
     "name": "漫自由",
     "key": "mheee_catalog",
-    "version": "2.3.1",
+    "version": "2.3.4",
     "fileName": "sources/mheee.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js",
     "description": "漫自由 EPUB/MOBI 文件目录型源；发现页保留最近更新和最高评分，支持网页文件下载。"

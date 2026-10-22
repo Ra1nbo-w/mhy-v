@@ -1,5 +1,68 @@
 # Changelog
 
+## 2.3.4 — 漫自由可以真的下载 EPUB / MOBI
+
+版本：漫自由为 2.3.4；包子、漫画屋、漫蛙、MYCOMIC、Komiic 为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。
+
+### 修复
+
+- 漫自由：`getDownloadUrl` 不再抛错，改为请求站点真正的前台接口 `POST https://mheee.com/m/vol/download_add`（表单 `ids[]=<卷ID>&ext=epub|mobi`，返回 `{result:[{url, file_name}]}`），由宿主把 EPUB / MOBI 下载到本地。未登录时站点返回 `4001002`，源内直接提示「请先在源设置的『登录』里登录漫自由网站账号」；触发每日额度时 `4001050` 会走通用错误信息。
+- 漫自由：归档条目改成和普通章节列表一样干净——标题直接用站点原名（`第01卷` / `第01话`），去掉「（网页文件下载）」与那句固定的长副标题，副标题改为紧凑信息 `41頁 · EPUB 19M · MOBI 19M`。页数文案本身带「頁」，不再重复拼接。
+- 漫自由：详情页描述删掉「卷目录」整段，只保留「怎么下载」和「本作共 N 卷」，作品页不再被卷列表撑长。
+- 漫自由：新增设置项「下载格式」（EPUB / MOBI，默认 EPUB），影响归档下载请求的 `ext`。
+
+### 工程
+
+- `index.json` / `optional.json` / `all.json` 同步到 2.3.4；`tools/validate.cjs` 与四套离线回归保持通过。
+- `docs/source-maintenance.md` 记录下载链路的实测依据（前台 `fileDownload()` 的请求格式与返回结构）。
+
+### 已知限制
+
+- 漫自由下载需要网站登录态：接口依赖登录 Cookie，Cookie 与内置 WebView 共享，所以先在源设置里走一次网页登录（或手动粘贴 `TSID`）。
+- 漫自由仍是「整卷文件」而非分话：阅读按钮不可用，只能通过「下载 → 归档」取 EPUB / MOBI。
+
+## 2.3.3 — 包子章节页与更新日期、标签补齐、登录入口
+
+版本：包子、MYCOMIC、漫蛙、Komiic、漫画屋、漫自由为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。
+
+### 修复
+
+- 包子：`loadEp` 不再只指向 `appcn.baozimh.com`。实测 `/user/page_direct` 会 302 到章节主机 `cn.cnbzmg.com/comic/chapter/<slug>/<section>_<chapter>.html`，页面里是 `<ul class="comic-contain">` 直接包 `<amp-img class="comic-contain__item" data-src>`，没有旧代码假设的 `.chapter-img` 中间层，旧选择器会取到 0 张图。现在按「登录同源章节页 → `cn.twbzmg.com` → `cn.cnbzmg.com` → appcn」依次尝试，选择器同时兼容两种结构，失败时把每个地址的原因拼进错误信息。
+- 包子：`updateTime` 恢复。页面文本是 `(2026年06月28日 更新)`，原代码只去掉括号，末尾“更新”让 `^\d{4}...日?$` 校验必然失败，追更日期一直为空。
+- 包子：`websiteOrigin` 承认两个章节镜像主机（只用于加 `Referer`/`cache-time` 和同一份 WebView UA，不搬 `__Host-` Cookie、不改登录入口）。挂代理访问时站点落到 `cn.twbzmg.com`，直连落到 `cn.cnbzmg.com`。
+- MYCOMIC：搜索排序真正生效。三个选项写成 `"-id-最新上架"` 时，读者端按第一个 `-` 切分会让 key 全部塌成空串、只剩一个 chip，`options[0]` 恒为假值；改为 `id-最新上架` 等，并在 `load` 里补站点需要的降序前缀 `-`。
+- MYCOMIC：恢复被覆盖时丢掉的 `loginWithCookies`（手动粘贴 `cf_clearance`）。原 `validate` 引用了未定义的 `headers`，异常被自身 `catch` 吞掉，验证永远返回 `false`；现在写入 Cookie 后用一次详情页请求判定成败。
+- 漫画屋：登录入口从首页改为分类页 `https://mhua5.com/index.php/category/tags/6`。首页和详情页不触发 Cloudflare，原入口永远拿不到 `cf_clearance`，而分类页、进度页和「更多」在真机上必然是 403 挑战页。
+- 漫画屋：详情页补 `题材` 标签（`a[href*="/index.php/category/tags/"]` 的链接文本）与既有 `作者` 并列。
+- 漫蛙：详情页补 `题材` 标签。页面没有「题材」字样，只有指向 `/booklist/?tag=<题材>` 的链接。
+- 拷贝：详情页补 `题材`（`theme=` 链接）、`状态`（「狀態」行）与 `updateTime`（「最後更新」行，繁体文案）。
+- 漫自由：`loadInfo` 显式返回 `tags: {}`。文件站详情只有卷目录，缺 `tags` 会被宿主判成 `Invalid data`。
+- 全部八个源：删除文件末尾的 `_checkedComic` 包装。它只兜底 `tags`，而包子/Komiic/MYCOMIC/如漫画/漫画屋本就返回标签，其余三源已改为显式返回；其中的 `instanceof Map` 分支在当前环境下永远不成立。
+
+### 登录
+
+- 包子：修掉网页登录永远不成功的根因。`checkStatus` 是普通函数却被宿主以 `source.account.loginWithWebview` 形式调用，`this` 指向配置对象而不是源实例，旧代码里的 `this.websiteOrigin(...)`、`this.loginHost`、`this.loadData(...)` 必抛 `TypeError`；现在统一使用 IIFE 闭包里的 `source`。同时在登录成功后回读 Cookie 并提示是否拿到 `TSID`，新增手动粘贴 `TSID` 的兜底入口与注册链接，删除已被覆盖、且引用着已删除 `settings.domains` 的旧 `account`。
+- 漫画屋：网页登录入口本来是首页，首页不触发 Cloudflare 挑战，拿到的会话对分类页无效；改为打开分类页并加手动粘贴 `cf_clearance` 的兜底，登录成功回读 Cookie。
+- 漫自由：旧 `checkStatus` 要求 `/m/user/(center|index)` 且标题含“漫自由”，但 `/m/user/center` 实为 404，未登录的 `/m/user/index` 本身就是登录表单，会在用户没登录时误判成功。现在要求标题不含 登录/注册/验证/404，并在 `onLoginSuccess` 里回读页面，仍带密码框就提示“没有确认到登录状态”。
+- Komiic：网页登录只能拿到 Cookie，而 API 走 `Authorization: Bearer`。新增手动粘贴 `token` 的兜底（用 `query{account{id}}` 校验），账号密码登录成功后也立即用同一查询验证；网页登录的提示语改为“只用于过网站验证”，避免误解。
+- MYCOMIC：`onLoginSuccess` 增加一次实际请求，命中 WAF 时直接告诉用户“站点仍拦截请求，可改用手动 `cf_clearance` 登录”；删除被覆盖的旧 `account`（其中 `validate` 引用了未定义的 `headers`）。
+- 漫蛙、拷贝、如漫画没有加入登录入口，因为它们不需要：漫蛙章节页与图片不设登录墙（`/book/<id>/1/` 未登录也返回正文），拷贝的 `/login`、`/comic/*`、`/user` 返回同一份 SPA 外壳、标题恒为“拷貝漫畫”，无法据 URL/标题判断登录状态，如漫画走公开 HTTP 接口。
+- 漫画屋、MYCOMIC、Komiic 各加一个设置页检查按钮：漫画屋直接请求分类页看是否还停在 Cloudflare 挑战、MYCOMIC 走一次站内请求看 WAF 是否放行、Komiic 用 `query{account{id}}` 校验已保存的 token。用户不必等到开新作品时才发现凭据没生效。
+
+### 工程
+
+- `.gitignore` 增加 `.audit/`、`.probe/`（线上核对用的临时克隆与探针脚本，不进入仓库）。
+- `docs/source-maintenance.md` 记录本轮实测结论（包子章节主机与槽位、漫画屋路径级验证、MYCOMIC WAF）与仍需实机确认的项。
+
+### 已知限制
+
+- 包子的章节键仍是位置索引。实测目录是 `section_slot=0` + `chapter_slot=0..n` 连续槽位，站点没有稳定的章节 ID 可迁移；`chapter_slot` 与现有位置索引一一对应。
+- 漫画屋分类页仍受 Cloudflare 托管挑战，源请求必须先在应用内网页过一次验证（登录入口已指向分类页）；首页与详情页直连不受影响。
+- MYCOMIC 被 WAF 直接拒绝（403 `Sorry, you have been blocked`）时内置网页同样进不去，只能手动粘贴 `cf_clearance`。
+- 漫蛙、漫画屋、MYCOMIC、漫自由仍没有可靠 `updateTime`（拷贝本轮已补）。
+- 如漫画仍使用 HTTP，站点证书不匹配 `rumanhua2.com`，不能改 HTTPS。
+- 包子的真实登录与读图仍需 Android/Windows 实机确认（章节页现在依赖网页主线 cookies）。
+
 ## 2.3.2 / 2.1.1 — 契约对齐
 
 ### 修复
