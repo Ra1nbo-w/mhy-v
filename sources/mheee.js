@@ -1,7 +1,7 @@
 // 漫自由：文件目录型源。本站提供 ePub/MOBI，非普通在线分话图片站。
 // VeneraNext 源 archive 下载当前面向 ZIP，本源不伪装 EPUB 为章节图片。
 class Mheee extends ComicSource {
-    name='漫自由'; key='mheee_catalog'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js"; base='https://mheee.com';
+    name='漫自由'; key='mheee_catalog'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js"; base='https://mheee.com';
     absolute(path){if(/^https?:\/\//.test(path||''))return path;if(String(path).startsWith('//'))return'https:'+path;return this.base+'/'+String(path||'').replace(/^\//,'');}
     async html(path){const r=await Network.get(this.base+path,{Referer:this.base+'/'});if(r.status!==200||/Just a moment|正在验证|Sorry, you have been blocked/.test(r.body||''))throw new Error('漫自由请求失败或需要浏览器验证：HTTP '+r.status);return r.body;}
     parseList(root){const seen={},comics=[];
@@ -14,7 +14,9 @@ class Mheee extends ComicSource {
     }
     async list(param,page,sort='0',options=[]){
         const filters={genre:'0',region:options[0]||'0',language:options[1]||'0',progress:options[2]||'0'};
-        const pair=String(param).split(':');if(pair.length===2&&pair[0] in filters)filters[pair[0]]=pair[1];else filters.genre=param;
+        const pair=String(param).split(':');
+        // hasOwnProperty：`'__proto__' in filters` 也为真，不能用来校验用户参数。
+        if(pair.length===2&&Object.prototype.hasOwnProperty.call(filters,pair[0]))filters[pair[0]]=pair[1];else filters.genre=param;
         const path='/m/list-'+filters.genre+'-'+filters.region+'-'+filters.progress+'-'+filters.language+'-0-'+sort+'-'+page,doc=new HtmlDocument(await this.html(path));
         try{let maxPage=page;for(const a of doc.querySelectorAll('.pagination a')){const n=Number((a.attributes.href||'').match(/-(\d+)$/)?.[1]);if(n>maxPage)maxPage=n;}return{comics:this.parseList(doc),maxPage};}finally{doc.dispose();}
     }
@@ -38,8 +40,11 @@ class Mheee extends ComicSource {
             try{
                 const title=(doc.querySelector('.detail h1')||doc.querySelector('.detail h5'))?.text.trim();if(!title)throw new Error('漫自由未找到作品。');
                 const img=doc.querySelector('.detail img'),volumes=doc.querySelectorAll('.vol-item-no').map(n=>n.text.trim());
-                this.saveData('lastComic',id);
-                return new ComicDetails({title,subtitle:'EPUB / MOBI 文件站 · 网页下载',cover:this.absolute(img?.attributes.src||''),description:'本站提供 EPUB / MOBI 文件，不是在线分话图片源。\n点“下载”后展开“Archive / 压缩包”，选择卷条目可打开网站下载页；不会创建软件内图片下载任务。也可到源设置打开最近查看的作品。网页登录与额度以网站为准。\n\n卷目录：\n'+volumes.join('\n'),chapters:{}});
+                // 记录最近作品供源设置使用；值未变化时不重复写盘。
+                if(this.loadData('lastComic')!==id)this.saveData('lastComic',id);
+                // 无封面时必须返回空串：absolute('') 会得到站点根地址，不是图片。
+                const coverSrc=img?.attributes['data-src']||img?.attributes.src||'';
+                return new ComicDetails({title,subtitle:'EPUB / MOBI 文件站 · 网页下载',cover:coverSrc?this.absolute(coverSrc):'',description:'本站提供 EPUB / MOBI 文件，不是在线分话图片源。\n点“下载”后展开“Archive / 压缩包”，选择卷条目可打开网站下载页；不会创建软件内图片下载任务。也可到源设置打开最近查看的作品。网页登录与额度以网站为准。\n\n卷目录：\n'+volumes.join('\n'),chapters:null});
             }finally{doc.dispose();}
         },
         loadEp:async()=>{throw new Error('漫自由提供 ePub / MOBI 文件，不支持普通分话图片阅读。请从源设置打开最近作品下载页。');},
@@ -60,9 +65,8 @@ class Mheee extends ComicSource {
             },
             getDownloadUrl:async(id,vol)=>{
                 if(!/^[a-zA-Z0-9_-]+$/.test(id)||!/^\d+$/.test(vol))throw new Error('无效作品或文件 ID。');
-                UI.launchUrl(this.base+'/comic/'+id+'#vol'+vol);
-                // 不返回 EPUB URL 给只支持 ZIP 图片归档的下载器。
-                throw new Error('已打开所选卷的网页，请在网站登录后点击下载。本源不启动软件内图片下载。');
+                // 契约要求返回非空 URL；本源不启动软件内下载，也不先切走用户到浏览器再报错。
+                throw new Error('漫自由不提供压缩包下载 URL。请到源设置点“打开最近查看的作品”，在网站登录后下载 EPUB / MOBI。');
             }
         }
     };

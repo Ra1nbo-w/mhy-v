@@ -1,6 +1,6 @@
 // 漫蛙单源线路版：只适配 manwa.me 同一站点的线路，不包含旧多站聚合。
 class Manwa extends ComicSource {
-    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
+    name='漫蛙漫画'; key='manwa_routes'; version = "2.3.2"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/manwa.js";
     pendingRoute=null; activeBase='';
     settings={
         line:{title:'线路选择',type:'select',options:[{value:'auto',text:'自动（缓存 / 备用入口 / 走失恢复）'},{value:'backup',text:'备用入口 fuwbn.cc/mw666'},{value:'permanent',text:'永久地址 manwa.me'},{value:'manual',text:'手动地址'}],default:'auto'},
@@ -44,12 +44,14 @@ class Manwa extends ComicSource {
     async probe(base){
         const html=await this.raw(base+'/');
         if(!/漫蛙/.test(html)||!/\/book\/\d+/.test(html))throw new Error('该地址不是已支持的漫蛙漫画站。');
-        // 固定抽样验证作品 ID，避免自动跳到不兼容站点导致历史记录错配。
-        const detail=await this.raw(base+'/book/8167');
+        // 抽样作品只做“同一站点”的额外确认：作品下架、章节改 ID 都不该让整条线路失效，
+        // 否则一次内容下架就会把自动线路切换全部打死。
+        let detail;
+        try{detail=await this.raw(base+'/book/8167');}catch(e){return base;}
         const doc=new HtmlDocument(detail);
         try{
             const title=doc.querySelector('.detail-main-info-title')?.text||'';
-            if(!/一人之下/.test(title)||!/\/chapter\/275364(?:["'?\s<]|$)/.test(detail))throw new Error('线路作品或章节 ID 与当前源不兼容，停止切换。');
+            if(title&&!/一人之下|漫蛙/.test(title)&&!/\/(?:chapter|book)\/\d+/.test(detail))throw new Error('线路作品或章节 ID 与当前源不兼容，停止切换。');
         }finally{doc.dispose();}
         return base;
     }
@@ -200,7 +202,11 @@ class Manwa extends ComicSource {
             if(n<1||n>16||plain.slice(-n).some(b=>b!==n))throw new Error('漫蛙图片解码失败，请更新漫画源。');
             return plain.slice(0,-n).buffer;
         }};},
-        onThumbnailLoad:url=>({url,headers:{Referer:(this.activeBase||'https://manwark.cc')+'/'}})
+        onThumbnailLoad:url=>{
+            const pieces=String(url).split('#venera-manwa-ref='),target=pieces[0];
+            const base=pieces[1]?this.cleanBase(decodeURIComponent(pieces[1])):(this.activeBase||'https://manwark.cc');
+            return {url:target,headers:{Referer:base+'/'}};
+        }
     };
 
     _checkedComic = this.comic;

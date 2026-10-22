@@ -19,7 +19,7 @@ function source(name){
   const actions=name==='mycomic'?[
    ...s.originalExplore.map(part=>()=>part.load(1)),()=>s.originalCategoryComics.load('','',[],1),
    ()=>s.categoryComics.ranking.load('views',1),()=>s.search.load('test',[],1),
-   ()=>s.originalComic.loadInfo('1'),()=>s.comic.loadInfo('1'),()=>s.comic.loadEp('1','1')
+   ()=>s.comic.loadInfo('1'),()=>s.comic.loadEp('1','1')
   ]:[()=>s.upstreamExplore[0].load(),()=>s.search.load('test',[],1),()=>s.favorites.loadComics(1),()=>s.comic.loadInfo('1'),()=>s.comic.loadEp('1','1')];
   for(const fail of [false,true])for(const action of actions){
    state.fail=fail;const count=state.created;
@@ -29,6 +29,8 @@ function source(name){
  }
  {
   const {s,state}=source('mycomic');state.status=404;
+  // 旧 loadInfo 已删除：列表解析只保留 readChapterGroups 一条路径，避免两套逻辑漂移。
+  assert.equal(typeof s.originalComic.loadInfo,'undefined','原 loadInfo 必须已删除');
   await assert.rejects(s.comic.loadInfo('1'),/HTTP 404/);assert.equal(state.created,0);
  }
  {

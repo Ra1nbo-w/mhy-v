@@ -7,7 +7,7 @@ class Baozi extends ComicSource {
   // 唯一标识符
   key = "baozi";
 
-  version = "2.3.1";
+  version = "2.3.2";
 
   minAppVersion = "1.18.0";
 
@@ -95,7 +95,7 @@ class Baozi extends ComicSource {
         "\r\n------WebKitFormBoundaryFUNUxpOwyUaDop8s--\r\n"
       );
       if (res.status !== 200) {
-        throw "Invalid status code: " + res.status;
+        throw new Error("Invalid status code: " + res.status);
       }
       let json = JSON.parse(res.body);
       let token = json.data;
@@ -139,13 +139,14 @@ class Baozi extends ComicSource {
   }
 
   parseJsonComic(e) {
-    return {
-      id: e.comic_id,
+    // 列表项必须是 Comic 实例：返回普通对象时 subTitle/subtitle 别名不会被转换，作者会丢。
+    return new Comic({
+      id: String(e.comic_id),
       title: e.name,
-      subTitle: e.author,
+      subtitle: e.author,
       cover: `https://static-tw.baozimh.com/cover/${e.topic_img}?w=285&h=375&q=100`,
       tags: e.type_names,
-    };
+    });
   }
 
   /// 探索页面
@@ -162,7 +163,7 @@ class Baozi extends ComicSource {
       load: async () => {
         var res = await this.getChecked(this.baseUrl);
         if (res.status !== 200) {
-          throw "Invalid status code: " + res.status;
+          throw new Error("Invalid status code: " + res.status);
         }
         let document = new HtmlDocument(res.body);
         try {
@@ -270,11 +271,13 @@ class Baozi extends ComicSource {
   /// 分类漫画页面, 即点击分类标签后进入的页面
   categoryComics = {
     load: async (category, param, options, page) => {
+      // 分类参数可能缺失（页面直接进入或选项被清空），先归一化再判断前缀。
+      const p = String(param || "all");
       let res = await this.getChecked(
-        `${this.baseUrl}/api/bzmhq/amp_comic_list?type=${param.startsWith('region:')?'all':param}&region=${param.startsWith('region:')?param.slice(7):(options[0]||'all')}&state=${options[1]||'all'}&filter=${encodeURIComponent(options[2]==='digits'?'0-9':(options[2]||'*'))}&page=${page}&limit=36&language=${this.lang}&__amp_source_origin=${this.baseUrl}`
+        `${this.baseUrl}/api/bzmhq/amp_comic_list?type=${p.startsWith('region:')?'all':p}&region=${p.startsWith('region:')?p.slice(7):(options[0]||'all')}&state=${options[1]||'all'}&filter=${encodeURIComponent(options[2]==='digits'?'0-9':(options[2]||'*'))}&page=${page}&limit=36&language=${this.lang}&__amp_source_origin=${this.baseUrl}`
       );
       if (res.status !== 200) {
-        throw "Invalid status code: " + res.status;
+        throw new Error("Invalid status code: " + res.status);
       }
       let maxPage = null;
       let json = JSON.parse(res.body);
@@ -303,7 +306,7 @@ class Baozi extends ComicSource {
     load: async (keyword, options, page) => {
       let res = await this.getChecked(`${this.baseUrl}/search?q=${encodeURIComponent(keyword)}`);
       if (res.status !== 200) {
-        throw "Invalid status code: " + res.status;
+        throw new Error("Invalid status code: " + res.status);
       }
       let document = new HtmlDocument(res.body);
       try {
@@ -332,7 +335,7 @@ class Baozi extends ComicSource {
           `${this.baseUrl}/user/operation_v2?op=del_bookmark&comic_id=${comicId}`
         );
         if (!res.status || res.status >= 400) {
-          throw "Invalid status code: " + res.status;
+          throw new Error("Invalid status code: " + res.status);
         }
         return "ok";
       } else {
@@ -340,7 +343,7 @@ class Baozi extends ComicSource {
           `${this.baseUrl}/user/operation_v2?op=set_bookmark&comic_id=${comicId}&chapter_slot=0`
         );
         if (!res.status || res.status >= 400) {
-          throw "Invalid status code: " + res.status;
+          throw new Error("Invalid status code: " + res.status);
         }
         return "ok";
       }
@@ -352,7 +355,7 @@ class Baozi extends ComicSource {
     loadComics: async (page, folder) => {
       let res = await this.getChecked(`${this.baseUrl}/user/my_bookshelf`);
       if (res.status !== 200) {
-        throw "Invalid status code: " + res.status;
+        throw new Error("Invalid status code: " + res.status);
       }
       let document = new HtmlDocument(res.body);
       try {
@@ -368,13 +371,13 @@ class Baozi extends ComicSource {
             .querySelector("div.info > ul")
             .children[4].children[0].text.trim();
 
-          return {
+          return new Comic({
             id: id,
             title: title,
-            subTitle: author,
+            subtitle: author,
             description: description,
             cover: e.querySelector("amp-img").attributes["src"],
-          };
+          });
         }
         let comics = document
           .querySelectorAll("div.bookshelf-items")
@@ -393,7 +396,7 @@ class Baozi extends ComicSource {
     loadInfo: async (id) => {
       let res = await this.getChecked(`${this.baseUrl}/comic/${id}`);
       if (res.status !== 200) {
-        throw "Invalid status code: " + res.status;
+        throw new Error("Invalid status code: " + res.status);
       }
       let document = new HtmlDocument(res.body);
       try {
@@ -413,42 +416,29 @@ class Baozi extends ComicSource {
           ?.text.trim()
           .replace("(", "")
           .replace(")", "");
-        if (!updateTime) {
-          const getLastChapterText = () => {
-            // 合并所有章节容器（处理可能存在多个列表的情况）
-            const containers = [
-              ...document.querySelectorAll(
-                "#chapter-items, #chapters_other_list"
-              ),
-            ];
-            let allChapters = [];
-            containers.forEach((container) => {
-              const chapters = container.querySelectorAll(".comics-chapters > a");
-              allChapters.push(...Array.from(chapters));
-            });
-            const lastChapter = allChapters[allChapters.length - 1];
-            return (
-              lastChapter?.querySelector("div > span")?.text.trim() ||
-              "暂无更新信息"
-            );
-          };
-          updateTime = getLastChapterText();
+        // 追更日期只接受 年-月-日 形态。此前用“最后一章标题”兜底，会把
+        // “第100话”这类文本当成日期，导致追更比较的是乱码；宁可不填。
+        const datePattern = /^\d{4}\s*[-年]\s*\d{1,2}\s*[-月]\s*\d{1,2}\s*日?$/;
+        if (!updateTime || !datePattern.test(updateTime)) {
+          updateTime = undefined;
         }
         let description = document
           .querySelector("p.comics-detail__desc")
           .text.trim();
-        let chapters = new Map();
+        // 章节 ID 目前是目录位置（"0".."n"），站点目录插入新章后旧记录会整体错位。
+        // 站点真实章节 ID 需要实机核对，未在离线环境臆改；此处先消除 Map，保持 key 不变。
+        const chapters = {};
         let i = 0;
         for (let c of document.querySelectorAll(
           "div#chapter-items > div.comics-chapters > a > div > span"
         )) {
-          chapters.set(i.toString(), c.text.trim());
+          chapters[i.toString()] = c.text.trim();
           i++;
         }
         for (let c of document.querySelectorAll(
           "div#chapters_other_list > div.comics-chapters > a > div > span"
         )) {
-          chapters.set(i.toString(), c.text.trim());
+          chapters[i.toString()] = c.text.trim();
           i++;
         }
         if (i === 0) {
@@ -457,7 +447,7 @@ class Baozi extends ComicSource {
             document.querySelectorAll("div.comics-chapters > a > div > span")
           ).reverse();
           for (let c of spans) {
-            chapters.set(i.toString(), c.text.trim());
+            chapters[i.toString()] = c.text.trim();
             i++;
           }
         }
@@ -475,11 +465,10 @@ class Baozi extends ComicSource {
             });
           }
         }
-        // updateTime 将 Y年 M月 D日 转化为 Y-M-D
-        let updateDate = updateTime
-          .replace(/年/g, "-")
-          .replace(/月/g, "-")
-          .replace(/日/g, "");
+        // updateTime 将 Y年 M月 D日 转化为 Y-M-D；缺失时保持 undefined。
+        const updateDate = updateTime
+          ? updateTime.replace(/年/g, "-").replace(/月/g, "-").replace(/日/g, "").replace(/\s+/g, "")
+          : undefined;
 
         return new ComicDetails({
           title: title,
@@ -503,7 +492,7 @@ class Baozi extends ComicSource {
 
       const res = await this.getChecked(currentPageUrl);
       if (res.status !== 200) {
-        throw `Invalid status code: ${res.status}`;
+        throw new Error(`Invalid status code: ${res.status}`);
       }
 
       const doc = new HtmlDocument(res.body);

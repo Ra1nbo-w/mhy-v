@@ -3,7 +3,7 @@
 class Rumanhua extends ComicSource {
     name = "如漫画";
     key = "rumanhua_com";
-    version = "2.1.0";
+    version = "2.1.1";
     minAppVersion = "1.16.0";
     url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/rumanhua.js";
     base = "http://rumanhua2.com";
@@ -53,32 +53,6 @@ class Rumanhua extends ComicSource {
             })), maxPage: 1 };
         }
     };
-    explore = [{
-        title: "如漫画", type: "multiPageComicList",
-        load: async page => {
-            if (page > 1) return { comics: [], maxPage: 1 };
-            const document = new HtmlDocument(await this.html("/"));
-            try {
-                const seen = {}, comics = [];
-                for (const card of document.querySelectorAll(".mult-body li")) {
-                    const a = card.querySelector("a"), img = card.querySelector("img"), title = card.querySelector(".card-title");
-                    const match = a && (a.attributes["href"] || "").match(/^\/([a-zA-Z0-9_-]+)\/$/);
-                    if (!match || !img || !title || seen[match[1]]) continue;
-                    seen[match[1]] = true;
-                    comics.push(new Comic({ id: match[1], title: title.text.trim(), cover: this.absolute(img.attributes["data-src"] || img.attributes["src"]) }));
-                }
-                if (!comics.length) throw new Error("无法解析首页，网站结构可能已变化。");
-                return { comics, maxPage: 1 };
-            } finally { document.dispose(); }
-        }
-    }];
-    category = {
-        title: "如漫画", enableRankingPage: false,
-        parts: [{ name: "题材", type: "fixed", itemType: "category",
-            categories: ["冒险", "热血", "都市", "玄幻", "悬疑", "耽美", "恋爱", "生活", "搞笑", "穿越", "修真", "后宫", "女主", "古风", "连载", "完结"],
-            categoryParams: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16"]
-        }]
-    };
     categoryComics = {
         optionList: [],
         load: async (category, param, options, page) => {
@@ -90,36 +64,6 @@ class Rumanhua extends ComicSource {
             return { comics, maxPage: comics.length >= 20 && page < 5 ? page + 1 : page };
         }
     };
-    decodeImages(html) {
-        // 网站将 Base64 图片列表以循环 XOR 编码，外层仅为词典替换。
-        // 只提取字符串和替换词典，绝不 eval / 执行下载来的脚本。
-        const packed = html.match(/\}\('([^']+)',(\d+),(\d+),'([^']+)'\.split/);
-        if (!packed) throw new Error("未找到支持的章节图片格式，网站可能已改版。");
-        const radix = Number(packed[2]), count = Number(packed[3]), words = packed[4].split("|");
-        if (radix < 2 || radix > 36 || count < 1 || count > words.length || count > 5000) {
-            throw new Error("章节图片字典参数不匹配，请更新源。");
-        }
-        const unpacked = packed[1].replace(/\b\w+\b/g, token => {
-            const index = parseInt(token, radix);
-            return Number.isFinite(index) && index < count && index.toString(radix) === token
-                ? words[index] || token : token;
-        });
-        const payload = unpacked.match(/var __c0rst96="([A-Za-z0-9+/=]+)"/);
-        const index = html.match(/class="readerContainer"\s+data-id="(\d+)"/);
-        const keys = ["smkhy258", "smkd95fv", "md496952", "cdcsdwq", "vbfsa256", "cawf151c", "cd56cvda", "8kihnt9", "dso15tlo", "5ko6plhy"];
-        const key = index && keys[Number(index[1])];
-        if (!payload || !key) throw new Error("章节图片编码参数不匹配，请更新源。");
-        const bytes = new Uint8Array(Convert.decodeBase64(payload[1]));
-        let inner = "";
-        for (let i = 0; i < bytes.length; i++) inner += String.fromCharCode(bytes[i] ^ key.charCodeAt(i % key.length));
-        let images;
-        try { images = JSON.parse(Convert.decodeUtf8(Convert.decodeBase64(inner))); }
-        catch (_) { throw new Error("章节图片解码失败，请刷新章节或更新源。"); }
-        if (!Array.isArray(images) || !images.length || !images.every(url => typeof url === "string" && /^https?:\/\//i.test(url))) {
-            throw new Error("该章节没有有效图片，或图片格式已变化。");
-        }
-        return images;
-    }
     comic = {
         loadInfo: async id => {
             this.validId(id);

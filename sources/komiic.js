@@ -1,7 +1,7 @@
 // Komiic.cc；以站点当前公开 GraphQL 接口和图片票据协议适配。
 // 分类 ID 参考 venera-app/venera-configs/komiic.js；本地定制版。
 class KomiicCC extends ComicSource {
-    name='Komiic漫画'; key='komiic_cc'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
+    name='Komiic漫画'; key='komiic_cc'; version = "2.3.2"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/komiic.js";
     base='https://komiic.cc'; tickets={}; ticketRequests={}; ticketEpoch=0;
     resetTickets(){this.ticketEpoch++;this.tickets={};this.ticketRequests={};}
     fields='id title imageUrl authors {id name} categories {id name} dateUpdated';
@@ -18,6 +18,8 @@ class KomiicCC extends ComicSource {
         return json.data;
     }
     parse(row){return new Comic({id:String(row.id),title:row.title,cover:row.imageUrl,subtitle:(row.authors||[]).map(a=>a.name).join(' / '),tags:(row.categories||[]).map(c=>c.name)});}
+    // 追更只接受 YYYY-MM-DD；接口偶尔返回带时间的 ISO 串，直接透传会被应用判为无效日期。
+    dateOnly(value){const m=String(value||'').match(/^\d{4}-\d{2}-\d{2}/);return m?m[0]:undefined;}
     async list(param,page=1,options=[]){
         const hot=param==='hot'||param==='views',recent=param==='recent';
         const fn=hot?'hotComics':recent?'recentUpdate':'comicByCategories';
@@ -85,8 +87,9 @@ class KomiicCC extends ComicSource {
             const data=await this.query('query($ids:[ID]!,$id:ID!){comicByIds(comicIds:$ids){'+this.fields+'} chaptersByComicId(comicId:$id){id serial type size}}',{ids:[String(id)],id:String(id)});
             const row=data.comicByIds[0];if(!row)throw new Error('Komiic 未找到该漫画。');
             const chapters={};
+            // 章节 ID 使用站点 id（ep_ 前缀），不随目录位置变化。
             for(const ch of data.chaptersByComicId)chapters['ep_'+ch.id]=(ch.type==='book'?'卷 ':'第 ')+ch.serial;
-            return new ComicDetails({title:row.title,cover:row.imageUrl,tags:{作者:(row.authors||[]).map(a=>a.name),题材:(row.categories||[]).map(c=>c.name)},chapters,updateTime:row.dateUpdated});
+            return new ComicDetails({title:row.title,cover:row.imageUrl,tags:{作者:(row.authors||[]).map(a=>a.name),题材:(row.categories||[]).map(c=>c.name)},chapters,updateTime:this.dateOnly(row.dateUpdated)});
         },
         loadEp:async(id,ep)=>{
             const epoch=this.ticketEpoch;

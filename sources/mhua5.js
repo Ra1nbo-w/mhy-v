@@ -1,6 +1,6 @@
 // 漫画屋移动网页适配；仅读取目录和图片，不执行网页广告脚本。
 class Mhua5 extends ComicSource {
-    name='漫画屋'; key='mhua5'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js";
+    name='漫画屋'; key='mhua5'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js";
     base='https://mhua5.com';
     headers(){return{'User-Agent':'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36',Referer:this.base+'/'};}
     absolute(path){if(/^https?:\/\//.test(path||''))return path;if(String(path).startsWith('//'))return'https:'+path;return this.base+'/'+String(path||'').replace(/^\//,'');}
@@ -26,7 +26,7 @@ class Mhua5 extends ComicSource {
             return{comics,maxPage};
         }finally{doc.dispose();}
     }
-    search={optionList:[],load:async(k,o,p)=>this.list('/index.php/search?key='+encodeURIComponent(k.trim()),p)};
+    search={optionList:[],load:async(k,o,p)=>{const q=k.trim();if(!q)return{comics:[],maxPage:1};return this.list('/index.php/search?key='+encodeURIComponent(q),p);}};
     explore=[{title:'漫画屋',type:'multiPartPage',load:async()=>{
         const doc=new HtmlDocument(await this.html('/',true));
         try{
@@ -48,7 +48,8 @@ class Mhua5 extends ComicSource {
     // 题材与进度 ID 均来自站点桌面首页导航。
     category={title:'漫画屋',enableRankingPage:false,parts:[
 
-        {name:'题材',type:'fixed',itemType:'category',categories:['热血','冒险','科幻','霸总','玄幻','校园','修真','搞笑','穿越','后宫','耽美','恋爱','悬疑','恐怖','战争','动作','同人','竞技','励志','架空','灵异','百合'],categoryParams:Array.from({length:22},(_,i)=>'/index.php/category/tags/'+(i+6))},
+        // 站点 tags/<id> 的 22 个题材；ID 与标签一一对应，写死会比循环推算更早暴露站点改动。
+        {name:'题材',type:'fixed',itemType:'category',categories:['热血','冒险','科幻','霸总','玄幻','校园','修真','搞笑','穿越','后宫','耽美','恋爱','悬疑','恐怖','战争','动作','同人','竞技','励志','架空','灵异','百合'],categoryParams:[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27].map(id=>'/index.php/category/tags/'+id)},
         {name:'进度',type:'fixed',itemType:'category',categories:['连载','完结'],categoryParams:['/index.php/category/finish/1','/index.php/category/finish/2']}
     ]};
     categoryComics={optionList:[],load:async(c,param,o,p)=>{
@@ -69,7 +70,8 @@ class Mhua5 extends ComicSource {
                 for(const [id,name]of rows.reverse())chapters['ep_'+id]=name;
                 if(!rows.length)throw new Error('漫画屋章节目录为空。');
                 const style=doc.querySelector('.box-back')?.attributes.style||'',cover=style.match(/url\(['"]?([^)'"\s]+)/)?.[1]||'';
-                return new ComicDetails({title,cover:this.absolute(cover),description:doc.querySelector('.comic-intro')?.text.trim()||'',tags:{作者:[doc.querySelector('.au-name')?.text.replace(/^作者[：:]\s*/,'').trim()||'']},chapters});
+                const author=doc.querySelector('.au-name')?.text.replace(/^作者[：:]\s*/,'').trim()||'';
+                return new ComicDetails({title,cover:cover?this.absolute(cover):'',description:doc.querySelector('.comic-intro')?.text.trim()||'',tags:author?{作者:[author]}:{},chapters});
             }finally{doc.dispose();}
         },
         loadEp:async(id,ep)=>{

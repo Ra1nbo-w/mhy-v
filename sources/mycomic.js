@@ -13,7 +13,6 @@ const headers = {
     "Referer": REFERER,
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
     "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
     "Upgrade-Insecure-Requests": "1",
     "Sec-Fetch-Dest": "document",
@@ -32,19 +31,13 @@ const headers = {
  * @returns {boolean}
  */
 function isCloudflareChallenge(status, body) {
-    if (status === 403 || status === 503) {
-        if (body && (body.indexOf("challenge-platform") !== -1 ||
-            body.indexOf("cf-browser-verification") !== -1 ||
-            body.indexOf("Just a moment") !== -1 ||
-            body.indexOf("__cf_chl_") !== -1)) {
-            return true;
-        }
-        return true;
-    }
-    if (body && body.indexOf("challenge-platform") !== -1) {
-        return true;
-    }
-    return false;
+    const text = body || "";
+    // 只有出现 Cloudflare 特征时才判为验证页；任意 403/503 都这么判会掩盖真实的
+    // 403（地区限制、作品下架）与 404，让用户去做无用的“登录验证”。
+    const marker = ["challenge-platform", "cf-browser-verification", "Just a moment",
+        "__cf_chl_", "Attention Required"].some((m) => text.indexOf(m) !== -1);
+    if (marker) return true;
+    return (status === 403 || status === 503) && text.trim().length === 0;
 }
 
 /**
@@ -56,7 +49,7 @@ function isCloudflareChallenge(status, body) {
 async function fetchWithCFCheck(url) {
     const resp = await Network.get(url, headers);
     if (isCloudflareChallenge(resp.status, resp.body)) {
-        throw "Cloudflare 验证拦截：请在漫画源设置中点击「登录」，在内置浏览器完成验证后重试；若显示 blocked，需检查网络或联系网站，不能保证解除。";
+        throw new Error("Cloudflare 验证拦截：请在漫画源设置中点击「登录」，在内置浏览器完成验证后重试；若显示 blocked，需检查网络或联系网站，不能保证解除。");
     }
     if (resp.status !== 200) throw new Error('MYCOMIC 请求失败：HTTP ' + resp.status);
     return resp;
@@ -111,7 +104,9 @@ function parseComicList(doc) {
 
         // Cover: prefer data-src (lazy-loaded), fallback to src
         let cover = img.attributes["data-src"] || img.attributes["src"] || "";
-        if (!cover || cover.indexOf("biccam.com/comics/") === -1) return;
+        if (cover.startsWith("//")) cover = "https:" + cover;
+        // 不绑定 CDN 域名：站点换 CDN 后按域名过滤会让整个列表静默变空。
+        if (!cover || cover.startsWith("data:")) return;
 
         // Title from alt attribute
         const title = (img.attributes["alt"] || "").trim() || id;
@@ -180,7 +175,7 @@ class MyComic extends ComicSource {
 
     key = "mycomic";
 
-    version = "2.3.1";
+    version = "2.3.2";
 
     minAppVersion = "1.16.0";
 
@@ -275,7 +270,7 @@ class MyComic extends ComicSource {
                 if (!page) page = 1;
                 const url = buildComicsUrl(page, "-id");
                 const resp = await fetchWithCFCheck(url);
-                if (resp.status !== 200) throw "HTTP " + resp.status;
+                if (resp.status !== 200) throw new Error("HTTP " + resp.status);
                 const doc = new HtmlDocument(resp.body);
                 try {
                     const comics = parseComicList(doc);
@@ -291,7 +286,7 @@ class MyComic extends ComicSource {
                 if (!page) page = 1;
                 const url = buildComicsUrl(page, "-update");
                 const resp = await fetchWithCFCheck(url);
-                if (resp.status !== 200) throw "HTTP " + resp.status;
+                if (resp.status !== 200) throw new Error("HTTP " + resp.status);
                 const doc = new HtmlDocument(resp.body);
                 try {
                     const comics = parseComicList(doc);
@@ -307,7 +302,7 @@ class MyComic extends ComicSource {
                 if (!page) page = 1;
                 const url = buildComicsUrl(page, "-views");
                 const resp = await fetchWithCFCheck(url);
-                if (resp.status !== 200) throw "HTTP " + resp.status;
+                if (resp.status !== 200) throw new Error("HTTP " + resp.status);
                 const doc = new HtmlDocument(resp.body);
                 try {
                     const comics = parseComicList(doc);
@@ -424,7 +419,7 @@ class MyComic extends ComicSource {
 
             const url = buildComicsUrl(page, sort, null, filterType, filterValue);
             const resp = await fetchWithCFCheck(url);
-            if (resp.status !== 200) throw "HTTP " + resp.status;
+            if (resp.status !== 200) throw new Error("HTTP " + resp.status);
 
             const doc = new HtmlDocument(resp.body);
             try {
@@ -460,7 +455,7 @@ class MyComic extends ComicSource {
                     sort +
                     (page > 1 ? "&page=" + page : "");
                 const resp = await fetchWithCFCheck(url);
-                if (resp.status !== 200) throw "HTTP " + resp.status;
+                if (resp.status !== 200) throw new Error("HTTP " + resp.status);
 
                 const doc = new HtmlDocument(resp.body);
                 try {
@@ -488,7 +483,7 @@ class MyComic extends ComicSource {
 
             const url = buildComicsUrl(page, sort, kw);
             const resp = await fetchWithCFCheck(url);
-            if (resp.status !== 200) throw "HTTP " + resp.status;
+            if (resp.status !== 200) throw new Error("HTTP " + resp.status);
 
             const doc = new HtmlDocument(resp.body);
             try {
@@ -518,118 +513,14 @@ class MyComic extends ComicSource {
     // ==================== Comic Detail ====================
 
     comic = {
-        loadInfo: async (id) => {
-            const url = BASE_URL + "/comics/" + id;
-            const resp = await fetchWithCFCheck(url);
-            if (resp.status !== 200) throw "HTTP " + resp.status;
-
-            const html = resp.body;
-            const doc = new HtmlDocument(html);
-            try {
-
-                // Parse meta tags
-                let title = getMetaContent(html, "og:title") || id;
-                title = title.replace(/\s*-\s*MYCOMIC.*$/, "").trim();
-
-                const description = getMetaContent(html, "description") || "";
-                const author = getMetaContent(html, "author") || "";
-                const cover =
-                    getMetaContent(html, "og:image") ||
-                    CDN_URL + "/comics/" + id + ".jpg";
-                const keywords = getMetaContent(html, "keywords") || "";
-
-                // Parse tags from filter links on the page
-                const tags = new Map();
-                const tagLinks = doc.querySelectorAll(
-                    "a[href*='filter%5Btag%5D']"
-                );
-                const tagNames = [];
-                tagLinks.forEach((a) => {
-                    const text = a.text.trim();
-                    if (text) tagNames.push(text);
-                });
-                if (tagNames.length) tags.set("类型", tagNames);
-
-                // Parse additional info from keywords
-                const keywordList = keywords
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean);
-                if (author) tags.set("作者", [author]);
-
-                // Try to extract country and audience from keywords
-                const countryMap = {
-                    日本: "日本",
-                    内地: "内地",
-                    韩国: "韩国",
-                    欧美: "欧美",
-                    港台: "港台",
-                    其他: "其他",
-                };
-                const audienceMap = {
-                    少年: "少年",
-                    少女: "少女",
-                    青年: "青年",
-                    儿童: "儿童",
-                    通用: "通用",
-                };
-                const countries = [];
-                const audiences = [];
-                keywordList.forEach((kw) => {
-                    if (countryMap[kw]) countries.push(kw);
-                    if (audienceMap[kw]) audiences.push(kw);
-                });
-                if (countries.length) tags.set("地区", countries);
-                if (audiences.length) tags.set("受众", audiences);
-
-                // Parse chapter list from Alpine.js x-data
-                // The x-data attribute contains: chapters: [{"id":96338,"title":"第16回"}, ...]
-                const chapters = new Map();
-                const chapterMatch = /chapters:\s*(\[[\s\S]*?\])/.exec(html);
-                if (chapterMatch) {
-                    try {
-                        const chapterList = JSON.parse(chapterMatch[1]);
-                        chapterList.forEach((ch) => {
-                            chapters.set(String(ch.id), ch.title);
-                        });
-                    } catch (e) {
-                        // Fallback: try to find chapter links in the page
-                        const chapterLinks = doc.querySelectorAll(
-                            "a[href*='/cn/chapters/']"
-                        );
-                        chapterLinks.forEach((a) => {
-                            const href = a.attributes["href"] || "";
-                            const m = /\/cn\/chapters\/(\d+)/.exec(href);
-                            if (m) {
-                                const chTitle = a.text.trim();
-                                if (chTitle && !chapters.has(m[1])) {
-                                    chapters.set(m[1], chTitle);
-                                }
-                            }
-                        });
-                    }
-                }
-
-                return new ComicDetails({
-                    title: title,
-                    cover: cover,
-                    description: description,
-                    tags: tags,
-                    chapters: chapters,
-                    thumbnails: [cover],
-                    url: url,
-                    uploader: author || undefined,
-                });
-            } finally { doc.dispose(); }
-        },
 
         loadEp: async (comicId, epId) => {
             if (!epId) {
-                throw "No episode id";
+                throw new Error("No episode id");
             }
             const url = BASE_URL + "/chapters/" + epId;
             const resp = await fetchWithCFCheck(url);
-            if (resp.status !== 200) throw "HTTP " + resp.status;
+            if (resp.status !== 200) throw new Error("HTTP " + resp.status);
 
             const doc = new HtmlDocument(resp.body);
             try {
@@ -643,7 +534,9 @@ class MyComic extends ComicSource {
                             img.attributes["data-src"] ||
                             img.attributes["src"] ||
                             "";
-                        if (src && src.indexOf("biccam.com/chapters/") !== -1) {
+                        if (src.startsWith("//")) src = "https:" + src;
+                        // 不锁定 CDN 域名：换域名后章节图不应整章为空。
+                        if (/^https?:\/\//.test(src)) {
                             images.push(src);
                         }
                     });
@@ -657,7 +550,9 @@ class MyComic extends ComicSource {
                             img.attributes["data-src"] ||
                             img.attributes["src"] ||
                             "";
-                        if (src && src.indexOf("biccam.com/chapters/") !== -1) {
+                        if (src.startsWith("//")) src = "https:" + src;
+                        // 不锁定 CDN 域名：换域名后章节图不应整章为空。
+                        if (/^https?:\/\//.test(src)) {
                             images.push(src);
                         }
                     });

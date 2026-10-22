@@ -1,9 +1,10 @@
 // 拷贝漫画公开网页接口适配；两条线路共享作品/章节 ID。
 class CopyWeb extends ComicSource {
-    name='拷贝漫画'; key='copy_web_routes'; version = "2.3.0"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js";
+    name='拷贝漫画'; key='copy_web_routes'; version = "2.3.1"; minAppVersion='1.16.0'; url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js";
     get base(){return this.loadSetting('line')==='mangacopy'?'https://www.mangacopy.com':'https://www.copy4000.com';}
     settings={line:{title:'线路选择',type:'select',options:[{value:'copy4000',text:'copy4000.com'},{value:'mangacopy',text:'mangacopy.com（需自行确认网络可达）'}],default:'copy4000'},website:{title:'当前网站',type:'callback',buttonText:'打开网站',callback:()=>UI.launchUrl(this.base)}};
-    headers(base){return{'User-Agent':'VeneraNext/v1.18.0','Referer':base+'/'};}
+    // 不把应用版本写死：升级 VeneraNext 后 UA 会立即失真。
+    headers(base){const version=(typeof APP!=='undefined'&&APP.version)||'unknown';return{'User-Agent':'VeneraNext/'+version,'Referer':base+'/'};}
     async get(path,base,extra={}){const r=await Network.get(base+path,{...this.headers(base),...extra});if(r.status!==200||/Just a moment|正在验证|Sorry, you have been blocked/i.test(r.body||''))throw new Error('拷贝漫画请求失败：HTTP '+r.status+'。请检查所选线路网络或在网站完成验证。');return r.body;}
     parseList(root){
         const seen={},comics=[];
@@ -27,7 +28,7 @@ class CopyWeb extends ComicSource {
         if(param==='/rank')return this.categoryComics.ranking.load('Day',page);
         const limit=['/recommend','/newest'].includes(param)?60:50;
         const base=this.base,ordering=options[0]==='popular'?'-popular':'-datetime_updated';
-        let path='/comics?ordering='+encodeURIComponent(ordering)+'&offset='+((page-1)*50)+'&limit=50'+(param?'&theme='+encodeURIComponent(param):'');
+        let path='/comics?ordering='+encodeURIComponent(ordering)+'&offset='+((page-1)*limit)+'&limit='+limit+(param?'&theme='+encodeURIComponent(param):'');
         const filters={region:options[1]||'',status:options[2]||''};
         if(param?.startsWith('region:')){filters.region=param.slice(7);path=path.replace(/&theme=[^&]*/,'');}
         if(param?.startsWith('status:')){filters.status=param.slice(7);path=path.replace(/&theme=[^&]*/,'');}
@@ -87,6 +88,7 @@ class CopyWeb extends ComicSource {
                 const directory=JSON.parse(await this.get('/comicdetail/'+id+'/chapters',base,{dnts:doc.querySelector('#dnt')?.attributes.value||''}));
                 if(directory.code!==200)throw new Error(directory.message||'拷贝目录加载失败。');
                 const decoded=this.decode(directory.results,key),chapters={};
+                // 顺序沿用接口返回；站点若改为新→旧，需实机核对后再决定是否反转。
                 for(const group of Object.values(decoded.groups||{})){
                     if(!Array.isArray(group.chapters)||group.chapters.length<Number(group.count||0))throw new Error('拷贝目录不完整，请勿下载；等待更新源。');
                     for(const row of group.chapters)chapters['ep_'+row.id]=(group.name==='默認'||group.name==='默认'?'':group.name+' / ')+row.name;
