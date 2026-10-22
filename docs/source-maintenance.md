@@ -65,7 +65,7 @@
 
 ## 验证
 
-- `tools/validate.cjs`：八个源语法与元数据，三份索引数量与顺序（`all.json` = `index.json` + `optional.json`），`sources/` 下无未登记脚本，`minAppVersion` 格式，以及三类契约错误（`new Map()`、抛字符串、缺失 `minAppVersion`）。
+- `tools/validate.cjs`：各源语法与元数据，索引条目数与 `sources/` 脚本数一致、`all.json` 与 `index.json` 逐条相同，`sources/` 下无未登记脚本，`minAppVersion` 格式，以及三类契约错误（`new Map()`、抛字符串、缺失 `minAppVersion`）。
 - `tools/test-ui.cjs`：发现页、分类、组合筛选及分页约定。
 - `tools/test-baozi-verification.cjs`：首次安装、升级及登录回调约定。
 - `tools/test-source-lifecycle.cjs`：正常/异常路径释放、HTTP 错误、图片地址、分类链接和账号切换并发场景；并断言 MYCOMIC 旧 `loadInfo` 已删除。

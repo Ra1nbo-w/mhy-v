@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.1 — 合并为单索引入口
+
+源脚本没有改动，只整理了仓库结构。
+
+### 变更
+
+- `index.json` 合并为全部九个源，`optional.json` 删除；`all.json` 保留为内容完全相同的兼容别名，旧链接不会 404。
+- `tools/validate.cjs` 不再校验「index + optional」，改为「`all.json` 与 `index.json` 逐条深比较」+「索引条目数等于 `sources/` 下脚本数」，加源或删源不会再忘记改常量。
+- `README.md` 去掉「默认源 / 可选源」两个入口和第二个链接，改成一张表加一个导入地址；维护说明同步。
+
+### 已知限制
+
+- 之前只导入过 `optional.json` 的用户，链接会失效，改用 `index.json` 或 `all.json` 重新导入一次即可。
+
 ## 1.0.0 — 新增「瓜子漫画」源
 
 版本：瓜子漫画为 1.0.0（新源）；漫自由为 2.3.4；包子、漫画屋、漫蛙、MYCOMIC、Komiic 为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。
@@ -15,7 +29,7 @@
 
 ### 工程
 
-- `index.json` 登记新源并写入 `all.json`；`tools/validate.cjs` 的索引条目数同步为 index 6 / optional 3。
+- `index.json` 登记新源并写入 `all.json`；`tools/validate.cjs` 的索引条目数改为与 `sources/` 脚本数一致。
 - `README.md` 增加瓜子漫画行、能力矩阵行与「全部九源」表述；`docs/source-maintenance.md` 记录本站结构与选择器依据。
 
 ### 已知限制

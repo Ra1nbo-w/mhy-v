@@ -10,7 +10,7 @@
 https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/index.json
 ```
 
-GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地址。不同应用版本的入口名称可能不同，旧版可以使用下表中的单源 JS 链接。
+一个链接收录全部九个源，安装时在预览页勾选需要的条目即可；`all.json` 是内容完全相同的兼容别名，旧链接不会失效。GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地址。不同应用版本的入口名称可能不同，旧版可以使用下表中的单源 JS 链接。
 
 已安装同 key 的源会更新已有源，不会额外安装一份。当前版本：瓜子漫画为 1.0.0（新源）；漫自由为 2.3.4；包子、MYCOMIC、漫蛙、Komiic、漫画屋为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。源 key 和更新地址保持一致。
 
@@ -18,9 +18,9 @@ GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地�
 
 本次逐项核对及未实现限制见 [发现页与分类页核对记录](docs/ui-audit.md)。更新源后刷新发现页；仍显示旧分区时完全退出应用再启动。
 
-## 默认源
+## 源列表
 
-主索引只收录已有搜索、目录或图片读取证据的六个常规源。它们没有完成所有作品、设备和网络环境的完整验收，网站改版、验证、额度或线路变化仍可能影响使用。
+一个索引收录全部源；下表前半是常规阅读源，后半是文件站与需要额外验证的源。它们没有完成所有作品、设备和网络环境的完整验收，网站改版、验证、额度或线路变化仍可能影响使用。
 
 | 名称 | 单源链接 | 已知情况 |
 |---|---|---|
@@ -30,22 +30,11 @@ GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地�
 | 漫画屋 | [mhua5.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mhua5.js) | 22 个题材及进度分类；修正封面请求头与目录名。分类页和进度页受 Cloudflare 托管挑战，需先从源设置的「登录」在分类页过一次验证（入口已直接指向分类页）。 |
 | 拷贝漫画 | [copy_manga.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js) | copy4000 / mangacopy 选线；详情页补题材、状态与更新日期；后者网络可达性尚未验证。 |
 | 瓜子漫画 | [guazimanhua.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/guazimanhua.js) | 纯 HTML 模板站，无登录墙；发现页四组、23 题材加进度/受众/排序、搜索、详情与章节阅读。章节用站点章节 ID，倒序目录自动反转。 |
-
-## 可选源
-
-可选索引：
-
-```text
-https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/optional.json
-```
-
-| 名称 | 单源链接 | 限制 |
-|---|---|---|
 | MYCOMIC | [mycomic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js) | 发现页为首页精选、推荐给你、最近更新、最新上架；搜索结果支持最新上架/最近更新/最高人气排序；站点被 WAF 直接拒绝时网页登录也进不去，可在源设置的「登录」里手动粘贴浏览器的 `cf_clearance`。 |
 | 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 2.3.3 章节页按「登录同源 → `cn.twbzmg.com` → `cn.cnbzmg.com` → appcn」回退并兼容两种图片结构，同时恢复详情页更新日期；挂代理访问时章节镜像落在 `cn.twbzmg.com`，直连落在 `cn.cnbzmg.com`。网页登录成功后可用手动 `TSID` 兜底。完整登录与 Android/Windows 实机仍待验证。详见 [验证说明](docs/baozi-verification.md)。 |
 | 漫自由 | [mheee.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js) | 发现页保留最近更新和最高评分；EPUB/MOBI 文件站，不支持分话阅读，但**可以在软件内直接下载**：登录网站账号后「下载」→ 展开「归档」选卷即可，可选 EPUB 或 MOBI（源设置里切换）。详情页没有标签，按空标签处理。 |
 
-全部九源索引为 [all.json](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/all.json)。不要把可选源的存在理解为验证问题已经解决。
+清单只说明每项能力有没有证据，不代表站点当下一定可用；遇到源失效先看对应源的「已知情况」，再按下方四条命令自检。
 
 ## 能力矩阵
 
@@ -80,7 +69,7 @@ node tools/test-baozi-verification.cjs
 node tools/test-source-lifecycle.cjs
 ```
 
-检查覆盖：脚本语法、索引格式、名称/key/版本/更新地址一致性、重复 key、`all.json` 与 `index.json + optional.json` 的顺序内容一致、`sources/` 下无未登记脚本、`minAppVersion` 格式，以及三类契约错误（`new Map()`、抛字符串、缺失 `minAppVersion`）。这些检查不代替网站或手机实测，仍需手动验证搜索、详情目录顺序、章节图片和离线下载。不要把账号 Cookie、令牌、原始抓包或个人日志提交到仓库。
+检查覆盖：脚本语法、索引格式、名称/key/版本/更新地址一致性、重复 key、`all.json` 与 `index.json` 内容完全一致、`sources/` 下无未登记脚本、`minAppVersion` 格式，以及三类契约错误（`new Map()`、抛字符串、缺失 `minAppVersion`）。这些检查不代替网站或手机实测，仍需手动验证搜索、详情目录顺序、章节图片和离线下载。不要把账号 Cookie、令牌、原始抓包或个人日志提交到仓库。
 
 同样的命令由 `.github/workflows/validate.yml` 在每次 push 和 PR 上执行；本地跑不过就不必等 CI。
 

@@ -9,31 +9,22 @@ const PRIVATE = /C:[\\/]|PHPSESSID=[a-zA-Z0-9]{8}|github_pat_|ghp_[a-zA-Z0-9]{20
 
 const readJson = (name) => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 
-const catalogs = [
-  { name: "index.json", count: 6 },
-  { name: "optional.json", count: 3 },
-];
-
-const entries = [];
-for (const catalog of catalogs) {
-  const items = readJson(catalog.name);
-  assert(Array.isArray(items), `${catalog.name} 必须是数组`);
-  assert.equal(items.length, catalog.count, `${catalog.name} 条目数应为 ${catalog.count}`);
-  entries.push(...items);
-}
+// 仓库只对外提供一个索引入口，所有源都在 index.json 里；all.json 保留为同内容的兼容别名。
+const entries = readJson("index.json");
+assert(Array.isArray(entries), "index.json 必须是数组");
+assert.equal(
+  entries.length,
+  fs.readdirSync(path.join(root, "sources")).filter((f) => f.endsWith(".js")).length,
+  "index.json 条目数应等于 sources/ 下的脚本数",
+);
 
 const all = readJson("all.json");
 assert(Array.isArray(all), "all.json 必须是数组");
-assert.equal(all.length, entries.length, "all.json 条目数应等于 index.json + optional.json");
-assert.equal(new Set(all.map((e) => e.key)).size, all.length, "all.json 的 key 必须唯一");
-
-// all.json 是 index + optional 的既定顺序快照，不允许出现“只在 all.json 里有”的幽灵条目。
-for (let i = 0; i < entries.length; i += 1) {
-  assert.deepEqual(all[i], entries[i], `all.json[${i}] 与 index/optional 的顺序或内容不一致`);
-}
+assert.equal(all.length, entries.length, "all.json 条目数应与 index.json 一致");
+assert.deepEqual(all, entries, "all.json 必须与 index.json 完全一致（兼容别名）");
 
 const declared = new Set();
-for (const item of all) {
+for (const item of entries) {
   const where = item.fileName || item.key;
   assert(/^\w+$/.test(item.key), `${where}: key 只能由字母、数字、下划线组成`);
   assert(/^\d+\.\d+\.\d+$/.test(item.version), `${where}: version 必须是 x.y.z`);
@@ -81,6 +72,6 @@ const orphans = fs
 assert.equal(orphans.length, 0, `存在未登记的脚本: ${orphans.join(", ")}`);
 
 console.log(
-  `PASS: ${all.length} scripts, ${catalogs.map((c) => c.name + "=" + c.count).join(" ")}, ` +
+  `PASS: ${entries.length} scripts, single index.json, ` +
     "metadata/update URLs aligned, unique keys, syntax valid."
 );
