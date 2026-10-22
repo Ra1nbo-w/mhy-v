@@ -10,7 +10,7 @@ const PRIVATE = /C:[\\/]|PHPSESSID=[a-zA-Z0-9]{8}|github_pat_|ghp_[a-zA-Z0-9]{20
 const readJson = (name) => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 
 const catalogs = [
-  { name: "index.json", count: 5 },
+  { name: "index.json", count: 6 },
   { name: "optional.json", count: 3 },
 ];
 

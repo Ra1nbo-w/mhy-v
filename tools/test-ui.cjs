@@ -61,6 +61,6 @@ function source(file,DocumentClass){
   s.originalExplore[0].load=async()=>{throw new Error('listing blocked');};
   assert.deepEqual((await s.explore[0].load()).map(part=>part.title),['首页精选','推荐给你','最近更新']);
  }
- console.log('PASS: 8 single discovery pages; no common groups; Komiic taxonomy and discovery; Manwa filters; category mapping and pagination.');
+ console.log('PASS: '+all.length+' single discovery pages; no common groups; Komiic taxonomy and discovery; Manwa filters; category mapping and pagination.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
 

@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.0.0 — 新增「瓜子漫画」源
+
+版本：瓜子漫画为 1.0.0（新源）；漫自由为 2.3.4；包子、漫画屋、漫蛙、MYCOMIC、Komiic 为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。
+
+### 新增
+
+- 瓜子漫画（`guazimanhua.js`）：站点是 PHP 服务端渲染的模板站，全部走 HTML 与 JSON-LD，没有登录墙。
+- 发现页四组：今日热门 `?sort=daily`、最近更新 `?sort=update`、高分榜 `?sort=score`、排行榜 `/top.php`，每片取前 6 部，「更多」跳到对应分类。
+- 分类：23 个题材（`cid=41..27`）、连载中/已完结（`is_end=2|1`）、男频/女频（`audience=1|2`）、排序（`sort=daily|hits|update|score`）；排行页支持总榜/今日/本周/本月。
+- 搜索走 `/category.php?keyword=`，翻页读站点 pager 的最大页码。
+- 详情：JSON-LD `ComicStory` 提供封面、作者、简介与 `dateModified`，`.cinema-strip` 的「题材」行补题材，「更新信息」侧栏取日期与状态；目录取 `.mobile-chapter-grid` 的链接并反转成阅读顺序，章节键用站点章节 ID（`ep_<id>`）。
+- 章节页取 `img.reading-image`，按 `data-page` 排序并去重；图片 CDN `img.guazicdn.com` 实测不需要 Referer。
+
+### 工程
+
+- `index.json` 登记新源并写入 `all.json`；`tools/validate.cjs` 的索引条目数同步为 index 6 / optional 3。
+- `README.md` 增加瓜子漫画行、能力矩阵行与「全部九源」表述；`docs/source-maintenance.md` 记录本站结构与选择器依据。
+
+### 已知限制
+
+- 模板站改版会让 `article.card`、`.cinema-strip`、`.mobile-chapter-grid` 等选择器失效，需要同步更新。
+- 站点不提供 `updateTime` 之外的时间粒度，追更按天比较；分类与搜索的翻页上限由站点 pager 决定。
+
 ## 2.3.4 — 漫自由可以真的下载 EPUB / MOBI
 
 版本：漫自由为 2.3.4；包子、漫画屋、漫蛙、MYCOMIC、Komiic 为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。

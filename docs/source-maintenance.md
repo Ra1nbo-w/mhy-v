@@ -2,6 +2,31 @@
 
 本文件按版本记录每次改动的原因与验证范围。没有依据的接口、站点限制和章节顺序保持原状，不在离线阶段猜测。
 
+## 1.0.0（新增瓜子漫画）
+
+`guazimanhua.js` 是新源，不是改造旧源。站点是 PHP 服务端渲染的静态模板（`/comic.php?id=`、`/chapter.php?id=`、`/category.php?cid=`），没有登录墙、没有 Cloudflare 挑战，抓到的 HTML 直接可解析。
+
+### 结构依据（2026-10-23 实测）
+
+- 列表卡片：`<article class="card"><a class="cover-wrap" href="/comic.php?id=23127"><img class="cover" …><span class="score">8.9</span><span class="genre">连载</span></a><h3><a …>大象无形</a></h3><div class="meta">番奇动漫 · 热血 · 都市</div></article>`；翻页在 `nav.pager`，链接形如 `/category.php?cid=13&page=2`。
+- 分类筛选参数：`cid`（23 个题材）、`is_end=1|2`（完结/连载）、`audience=1|2`（男频/女频）、`city`（地区）、`sort=update|hits|daily|score`；搜索是 `GET /category.php?keyword=`。
+- 详情页：JSON-LD `ComicStory` 带 `name / author.name / image / description / dateModified`；`.cinema-strip > div` 是「作者｜分类｜题材｜热度｜最新」信息行；`section.side-card` 里标题为「更新信息」的那张卡片正文是 `更新时间：…<br>最新章节：…<br>章节总数：…<br>状态：…`。
+- 章节目录：`.mobile-chapter-grid` 内是 `<a class="new" href="/chapter.php?id=2559326">86 出发去京城</a>`，站点按新到旧排列（实测 87 条，最后一条是 `0 预告`），所以按文档顺序读入后整体反转，键用 `ep_<站点章节 ID>`。
+- 章节页：`img.reading-image` 带 `data-page`（1..N）与 `src`；同一章内图片可能在 `img.guazicdn.com/th/comics/chapters/…`，也可能在 `img.guazicdn.com/rmh/comics/…`，所以不做路径校验，只做去重与按 `data-page` 排序。
+- 图片 CDN 实测不校验 Referer（无 Referer 请求返回 200 `image/webp`），`onImageLoad` 仍统一补上站内 `Referer`，避免 CDN 以后收紧。
+
+### 实现取舍
+
+- 发现页用四组（今日热门/最近更新/高分榜/排行榜）拼 `multiPartPage`，每组 6 部 + `viewMore` 跳分类；`sort=hits` 与 `/top.php` 的前几名高度重合，所以第三组改为高分榜，避免两块内容一样。
+- `categoryComics.load` 只接受 `key=value&…` 形式的参数（正则白名单），`rank:<period>` 前缀转给排行榜；这样可以防住脚本里拼 URL 时的意外注入。
+- 详情页状态优先取「更新信息」里的 `状态：`，取不到才退回 `.cinema-info .meta .badge`，因为后者在有多个徽章时可能是题材而不是连载状态。
+- 没有做 `settings`、`account`：站点不登录也能读全部内容，硬塞登录入口只会让用户以为需要账号。
+
+### 验证
+
+- 用 cheerio 在 `%TEMP%` 里复刻宿主 `HtmlDocument` 的 `querySelector/querySelectorAll/text/attributes`，把真实源脚本跑在真实页面上：发现页四组各 6 部、`/comic.php?id=18741` 取到 87 章（`0 预告` 在最前）、`/comic.php?id=23127` 取到作者 + 四个题材、章节页 58 张图、搜索「重生」35 条、`cid=13` 第 1 页 36 条 / `maxPage=23`、`is_end=1` 的状态回读为「完结」、排行榜 30 条。
+- 仓库侧四套离线回归全部通过；新源也通过 `test-ui.cjs` 对「发现页只有一个 multiPartPage 且标题等于源名」「分类名等于源名」「`categories.length === categoryParams.length`」的断言。
+
 ## 2.3.2 / 2.1.1（契约对齐）
 
 这一轮的目标不是“多解析一个页签”，而是让源符合 VeneraNext 的源契约，并去掉会静默出错的结构。所有改动都能用离线测试证明，站点结构相关的不确定性在文末列出。
