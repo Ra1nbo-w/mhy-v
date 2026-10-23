@@ -2,13 +2,15 @@
 // 站点是 PHP 服务端渲染的静态模板：列表 article.card、详情带 JSON-LD ComicStory + .cinema-strip、
 // 章节页 .reading-image，图片在 img.guazicdn.com（实测不校验 Referer）。
 // 2026-10-23 按线上结构编写；只解析 HTML 与 JSON-LD，不执行网站 JavaScript。
+// 1.0.1：网页请求遇到 403/429 自动退避重试；图片请求显式带上 Referer 与移动端 UA；设置页新增图片自检。
 class GuaziManhua extends ComicSource {
     name = "瓜子漫画";
     key = "guazimanhua";
-    version = "1.0.0";
+    version = "1.0.1";
     minAppVersion = "1.16.0";
     url = "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/guazimanhua.js";
     base = "https://www.guazimanhua.com";
+    userAgent = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36";
 
     absolute(path) {
         const value = String(path || "").trim();
@@ -19,13 +21,24 @@ class GuaziManhua extends ComicSource {
     headers() {
         return {
             "Referer": this.base + "/",
+            "User-Agent": this.userAgent,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
         };
     }
+    imageHeaders() {
+        return { "Referer": this.base + "/", "User-Agent": this.userAgent };
+    }
     async html(path) {
-        const response = await Network.get(this.absolute(path), this.headers());
-        if (response.status !== 200) throw new Error("瓜子漫画网页请求失败：HTTP " + response.status);
-        return response.body;
+        const url = this.absolute(path);
+        let response = null;
+        // 站点偶尔把并发请求当成爬虫回 403/429；退避重试两次，仍失败时把状态码和地址一起报出来。
+        for (let attempt = 0; attempt < 3; attempt++) {
+            response = await Network.get(url, this.headers());
+            if (response.status === 200) return response.body;
+            if (response.status !== 403 && response.status !== 429 && response.status < 500) break;
+            await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+        }
+        throw new Error("瓜子漫画网页请求失败：HTTP " + response.status + "（" + url + "）");
     }
     // 列表页的翻页条只给出附近的页码，取最大值即可；没有翻页条时按"是否满一页"推进。
     maxPage(document, page, count) {
@@ -248,8 +261,8 @@ class GuaziManhua extends ComicSource {
                 return { images: pages.map(item => item.url) };
             } finally { document.dispose(); }
         },
-        onImageLoad: image => ({ url: image, headers: { "Referer": this.base + "/" } }),
-        onThumbnailLoad: image => ({ url: image, headers: { "Referer": this.base + "/" } }),
+        onImageLoad: image => ({ url: image, headers: this.imageHeaders() }),
+        onThumbnailLoad: image => ({ url: image, headers: this.imageHeaders() }),
         link: {
             domains: ["guazimanhua.com", "www.guazimanhua.com"],
             linkToId: url => {
@@ -321,5 +334,58 @@ class GuaziManhua extends ComicSource {
                 categoryParams: ["sort=daily", "sort=hits", "sort=update", "sort=score"]
             }
         ]
+    };
+
+    settings = {
+        checkImage: {
+            title: "图片请求检查（用阅读页同一套请求头试抓一张章节图）",
+            type: "callback",
+            buttonText: "试抓一张章节图",
+            callback: async () => {
+                UI.showLoading("正在试抓章节图…");
+                try {
+                    const list = new HtmlDocument(await this.html("/category.php?sort=daily"));
+                    let comicId = "";
+                    try {
+                        for (const card of list.querySelectorAll("article.card")) {
+                            const link = card.querySelector("h3 a") || card.querySelector("a.cover-wrap");
+                            const match = String((link && link.attributes && link.attributes["href"]) || "").match(/comic\.php\?id=(\d+)/);
+                            if (match) { comicId = match[1]; break; }
+                        }
+                    } finally { list.dispose(); }
+                    if (!comicId) throw new Error("列表页没有解析到作品。");
+
+                    const detail = new HtmlDocument(await this.html("/comic.php?id=" + comicId));
+                    let chapterId = "";
+                    try {
+                        for (const link of detail.querySelectorAll("a")) {
+                            const match = String((link.attributes && link.attributes["href"]) || "").match(/chapter\.php\?id=(\d+)/);
+                            if (match) { chapterId = match[1]; break; }
+                        }
+                    } finally { detail.dispose(); }
+                    if (!chapterId) throw new Error("详情页没有解析到章节 id。");
+
+                    const chapter = new HtmlDocument(await this.html("/chapter.php?id=" + chapterId));
+                    let image = "";
+                    try {
+                        for (const node of chapter.querySelectorAll("img.reading-image")) {
+                            const attrs = node.attributes || {};
+                            image = String(attrs["src"] || attrs["data-src"] || "");
+                            if (image) break;
+                        }
+                    } finally { chapter.dispose(); }
+                    if (!image) throw new Error("章节页没有解析到图片。");
+
+                    const response = await Network.get(image, this.imageHeaders());
+                    UI.cancelLoading();
+                    const host = (image.match(/^https?:\/\/([^/]+)/) || [])[1] || "图片 CDN";
+                    UI.showMessage("图片主机 " + host + " 返回 HTTP " + response.status +
+                        (response.status === 200 ? "，请求头与阅读页一致，当前网络可以取图。" : "，源侧没有可改的开关，换网络或开代理后再试。"));
+                } catch (error) {
+                    UI.cancelLoading();
+                    UI.showMessage("图片请求检查失败：" + ((error && error.message) || error));
+                }
+            }
+        }
     };
 }

@@ -42,7 +42,7 @@
   {
     "name": "瓜子漫画",
     "key": "guazimanhua",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "fileName": "sources/guazimanhua.js",
     "url": "https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/guazimanhua.js",
     "description": "瓜子漫画：首页精选、排行榜、23 个题材与进度/受众/排序筛选、搜索和章节阅读；站点为纯 HTML 模板，无需登录。"

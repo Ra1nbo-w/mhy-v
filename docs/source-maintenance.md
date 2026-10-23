@@ -27,6 +27,15 @@
 - 用 cheerio 在 `%TEMP%` 里复刻宿主 `HtmlDocument` 的 `querySelector/querySelectorAll/text/attributes`，把真实源脚本跑在真实页面上：发现页四组各 6 部、`/comic.php?id=18741` 取到 87 章（`0 预告` 在最前）、`/comic.php?id=23127` 取到作者 + 四个题材、章节页 58 张图、搜索「重生」35 条、`cid=13` 第 1 页 36 条 / `maxPage=23`、`is_end=1` 的状态回读为「完结」、排行榜 30 条。
 - 仓库侧四套离线回归全部通过；新源也通过 `test-ui.cjs` 对「发现页只有一个 multiPartPage 且标题等于源名」「分类名等于源名」「`categories.length === categoryParams.length`」的断言。
 
+### 1.0.1 修正（下载 403）
+
+- 用户反馈「下载漫画被 403」。从这台机器上用多种姿势复测，服务端**没有**按 UA / Referer / 并发拦普通请求：
+  - 封面与章节图，UA 分别用 `VeneraNext/1.18.0`、`Dart/3.9 (dart:io)`、`node`、`curl/8.4.0`、Chrome 141、iPhone Safari：全部 200，字节数一致。
+  - `Referer` 为空、`https://www.guazimanhua.com/`、`https://evil.example/`：全部 200。`HEAD` 200，`Range: bytes=0-1023` 返回 206。
+  - 12 个章节页顺序请求、20 个章节页并发、40 张章节图并发：全部 200，单批 < 1.5s。
+- 因此把注意力放在「批量下载时被当成爬虫」和「请求头不完整」这两类客户端因素上：`html()` 对 403/429/5xx 做 400ms、800ms 两次退避重试；网页与图片请求统一带 `Referer` + 移动端 UA（原来只有 `Referer` 和 `Accept`，没有 UA）；设置页加「图片请求检查」，用阅读页同一套请求头试抓一张图并报出主机与状态码。
+- 仍然存在的可能原因（源侧无法覆盖）：代理出口 IP 被 CDN 拒绝、DNS 落到受限边缘、应用侧的超时被当作失败。自检按钮的返回值可以直接区分前两种。
+
 ## 2.3.2 / 2.1.1（契约对齐）
 
 这一轮的目标不是“多解析一个页签”，而是让源符合 VeneraNext 的源契约，并去掉会静默出错的结构。所有改动都能用离线测试证明，站点结构相关的不确定性在文末列出。
