@@ -1,5 +1,5 @@
 // 本地定制版 2026-10-19；基于 venera-app/venera-configs 同名公开源修改。
-// 上游参考及修改说明见 NOTICE.md；更新由本仓库提供。
+// 上游参考及修改说明见 README 的「来源与许可」；更新由本仓库提供。
 class Baozi extends ComicSource {
   // 此漫画源的名称
   name = "包子漫画";

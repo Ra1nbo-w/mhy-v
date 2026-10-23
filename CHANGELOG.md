@@ -1,5 +1,22 @@
 # Changelog
 
+## 仓库精简 — 四个工具合成一个、三个文档合成一个
+
+源脚本没有改动，只减少仓库里的文件数量。
+
+### 变更
+
+- `tools/validate.cjs`、`test-ui.cjs`、`test-source-lifecycle.cjs`、`test-baozi-verification.cjs` 合并为 `tools/check.cjs`，一条命令跑完四套检查，CI 也只调这一个入口。
+- `docs/source-maintenance.md`、`docs/ui-audit.md`、`docs/baozi-verification.md` 合并为根目录 `MAINTENANCE.md`，按「通用约定 / 各源要点 / 登录要点 / 版本要点 / 发现页核对 / 遗留」重排并去重。
+- 删除 `all.json`：它与 `index.json` 内容完全相同，是上一轮为旧链接保留的别名。现在只保留一个索引入口。
+- 删除 `NOTICE.md`：来源与许可说明并入 `README.md` 的「来源与许可」。
+- 删除 `patches/`：那份应用端补丁是早期准备的可选改动，从未验证、也不属于源文件，容易让人以为安装源需要先打补丁。
+- `README.md` 增加「文件」结构小节，维护命令改为单条 `node tools/check.cjs`。
+
+### 已知限制
+
+- 只导入过 `all.json` 的用户需要改用 `index.json` 重新导入一次（同 key 会原地更新）。
+
 ## 瓜子漫画 1.0.1 — 403 退避重试与图片自检
 
 ### 修复
@@ -20,7 +37,7 @@
 
 ### 变更
 
-- `index.json` 合并为全部九个源，`optional.json` 删除；`all.json` 保留为内容完全相同的兼容别名，旧链接不会 404。
+- `index.json` 合并为全部九个源，`optional.json` 删除；`all.json` 当时保留为内容完全相同的兼容别名、后来在「仓库精简」一轮删除。
 - `tools/validate.cjs` 不再校验「index + optional」，改为「`all.json` 与 `index.json` 逐条深比较」+「索引条目数等于 `sources/` 下脚本数」，加源或删源不会再忘记改常量。
 - `README.md` 去掉「默认源 / 可选源」两个入口和第二个链接，改成一张表加一个导入地址；维护说明同步。
 

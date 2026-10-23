@@ -10,13 +10,13 @@
 https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/index.json
 ```
 
-一个链接收录全部九个源，安装时在预览页勾选需要的条目即可；`all.json` 是内容完全相同的兼容别名，旧链接不会失效。GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地址。不同应用版本的入口名称可能不同，旧版可以使用下表中的单源 JS 链接。
+一个链接收录全部九个源，安装时在预览页勾选需要的条目即可。GitHub 仓库首页用于查看文件；软件导入请使用上面的 JSON 地址。不同应用版本的入口名称可能不同，旧版可以使用下表中的单源 JS 链接。
 
 已安装同 key 的源会更新已有源，不会额外安装一份。当前版本：瓜子漫画为 1.0.1；漫自由为 2.3.4；包子、MYCOMIC、漫蛙、Komiic、漫画屋为 2.3.3；拷贝为 2.3.2；如漫画为 2.1.2。源 key 和更新地址保持一致。
 
 瓜子漫画 1.0.0 上线：首页精选四组（今日热门、最近更新、高分榜、排行榜）、23 个题材加进度/受众/排序筛选、搜索、详情与章节阅读全部走站点 HTML 与 JSON-LD，没有登录墙。1.0.1 针对部分网络下的 403：网页请求遇到 403/429 会退避重试两次，网页与图片请求统一带 `Referer` 和移动端 UA，设置页新增「图片请求检查」按钮可直接分辨是图片 CDN 拒绝还是源解析出错。2.3.4 只动漫自由：它在软件内就能下载 EPUB / MOBI 了——归档列表改成普通章节列表的样子，卷 ID 直接换真实文件地址（依赖网站登录态），并可选择 EPUB 或 MOBI。2.3.3 是本轮线上核对后的集中修复：包子章节页改走网页章节页并同时兼容两种图片结构、包子更新日期恢复、MYCOMIC 搜索排序与手动 Cookie 登录恢复、漫画屋登录入口改到真正会被挑战的分类页、漫蛙/漫画屋/拷贝补标签、拷贝补更新日期；五个有账号体系的源也逐个修掉了登录缺陷（包子 `checkStatus` 的 `this` 指向、漫自由把登录页误判成已登录、Komiic 只有 Cookie 拿不到 API token、漫画屋入口打不开挑战页、MYCOMIC 缺失败提示），并各加一条手动凭据兜底。逐项变更见 [CHANGELOG](CHANGELOG.md)。
 
-本次逐项核对及未实现限制见 [发现页与分类页核对记录](docs/ui-audit.md)。更新源后刷新发现页；仍显示旧分区时完全退出应用再启动。
+本次逐项核对、站点结构依据与未实现限制见 [MAINTENANCE.md](MAINTENANCE.md)。更新源后刷新发现页；仍显示旧分区时完全退出应用再启动。
 
 ## 源列表
 
@@ -31,7 +31,7 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/index.json
 | 拷贝漫画 | [copy_manga.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/copy_manga.js) | copy4000 / mangacopy 选线；详情页补题材、状态与更新日期；后者网络可达性尚未验证。 |
 | 瓜子漫画 | [guazimanhua.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/guazimanhua.js) | 纯 HTML 模板站，无登录墙；发现页四组、23 题材加进度/受众/排序、搜索、详情与章节阅读。章节用站点章节 ID，倒序目录自动反转。 |
 | MYCOMIC | [mycomic.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mycomic.js) | 发现页为首页精选、推荐给你、最近更新、最新上架；搜索结果支持最新上架/最近更新/最高人气排序；站点被 WAF 直接拒绝时网页登录也进不去，可在源设置的「登录」里手动粘贴浏览器的 `cf_clearance`。 |
-| 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 2.3.3 章节页按「登录同源 → `cn.twbzmg.com` → `cn.cnbzmg.com` → appcn」回退并兼容两种图片结构，同时恢复详情页更新日期；挂代理访问时章节镜像落在 `cn.twbzmg.com`，直连落在 `cn.cnbzmg.com`。网页登录成功后可用手动 `TSID` 兜底。完整登录与 Android/Windows 实机仍待验证。详见 [验证说明](docs/baozi-verification.md)。 |
+| 包子漫画 | [baozi.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/baozi.js) | 2.3.3 章节页按「登录同源 → `cn.twbzmg.com` → `cn.cnbzmg.com` → appcn」回退并兼容两种图片结构，同时恢复详情页更新日期；挂代理访问时章节镜像落在 `cn.twbzmg.com`，直连落在 `cn.cnbzmg.com`。网页登录成功后可用手动 `TSID` 兜底。完整登录与 Android/Windows 实机仍待验证。详见 [维护记录](MAINTENANCE.md)。 |
 | 漫自由 | [mheee.js](https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/sources/mheee.js) | 发现页保留最近更新和最高评分；EPUB/MOBI 文件站，不支持分话阅读，但**可以在软件内直接下载**：登录网站账号后「下载」→ 展开「归档」选卷即可，可选 EPUB 或 MOBI（源设置里切换）。详情页没有标签，按空标签处理。 |
 
 清单只说明每项能力有没有证据，不代表站点当下一定可用；遇到源失效先看对应源的「已知情况」，再按下方四条命令自检。
@@ -63,23 +63,30 @@ https://raw.githubusercontent.com/Ra1nbo-w/mhy-v/main/index.json
 发布前运行：
 
 ```sh
-node tools/validate.cjs
-node tools/test-ui.cjs
-node tools/test-baozi-verification.cjs
-node tools/test-source-lifecycle.cjs
+node tools/check.cjs
 ```
 
-检查覆盖：脚本语法、索引格式、名称/key/版本/更新地址一致性、重复 key、`all.json` 与 `index.json` 内容完全一致、`sources/` 下无未登记脚本、`minAppVersion` 格式，以及三类契约错误（`new Map()`、抛字符串、缺失 `minAppVersion`）。这些检查不代替网站或手机实测，仍需手动验证搜索、详情目录顺序、章节图片和离线下载。不要把账号 Cookie、令牌、原始抓包或个人日志提交到仓库。
+一次跑完四套检查：索引与源契约（元数据、更新地址、重复 key、语法、`minAppVersion`，以及 `new Map()`、抛字符串这类会静默出错的写法）、发现页与分类/组合筛选/分页、文档生命周期与票据并发、包子登录与会话保存。这些不代替网站或手机实测，仍需手动验证搜索、目录顺序、章节图片和离线下载。不要把账号 Cookie、令牌、原始抓包或个人日志提交到仓库。
 
-同样的命令由 `.github/workflows/validate.yml` 在每次 push 和 PR 上执行；本地跑不过就不必等 CI。
+同样的命令由 `.github/workflows/check.yml` 在每次 push 和 PR 上执行；本地跑不过就不必等 CI。
 
 如遇页面缓存类型错误，替换源后先完全退出 VeneraNext 再启动，不必清空收藏和历史记录。网站验证失败与应用错误需要根据最新日志分别判断。
 
-## 来源
+## 文件
+
+```text
+index.json          唯一索引入口，收录全部源
+sources/*.js        源脚本，每个文件一个源
+tools/check.cjs     全部检查，零依赖
+MAINTENANCE.md      维护记录：站点结构、改动原因、已知限制
+CHANGELOG.md        逐版本变更
+.github/workflows/  push / PR 上执行 tools/check.cjs
+```
+
+## 来源与许可
 
 - [VeneraNext 源接口文档](https://github.com/CyrilPeng/Venera-Next/blob/main/doc/api/comic_source.zh.md)
-- [venera-app/venera-configs](https://github.com/venera-app/venera-configs)：包子、MYCOMIC 基于其同名公开脚本修改；Komiic 分类 ID 参考其实现。
+- [venera-app/venera-configs](https://github.com/venera-app/venera-configs)：`baozi.js`、`mycomic.js` 基于其同名公开脚本修改（保留上游站点解析代码，另加同主机网页登录、验证检查与发现页分区）；`komiic.js` 的分类 ID 参考其实现。
+- 其余源为依据公开站点页面与 VeneraNext 接口编写的适配文件。
 
-代码来源和修改情况见 [NOTICE.md](NOTICE.md)。本仓库不包含漫画正文、账号凭据或个人请求记录。
-
-`patches/` 下是对 VeneraNext 应用本体的补丁，不属于源文件，也不会被导入器读取；升级 VeneraNext 后需要按新版本重新应用或丢弃，源侧问题不要靠补丁掩盖。
+上游作者保留其代码权利；上面的来源说明不构成对上游代码的额外许可，也不为整个仓库擅自指定统一许可证，使用或再分发时请核对相应上游授权。本仓库不包含漫画正文、账号凭据、固定验证 Cookie 或个人请求记录，也不提供网站验证成功的保证。
